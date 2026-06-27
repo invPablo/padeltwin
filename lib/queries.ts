@@ -5,6 +5,7 @@ import type {
   AchievementWithProfile,
   CoachLead,
   CoachLeadWithProfiles,
+  EloHistoryEntry,
   League,
   LeagueMemberWithProfile,
   Match,
@@ -408,6 +409,64 @@ export function useMyStats(userId: string | undefined) {
         winRate: played > 0 ? Math.round((won / played) * 100) : 0,
         eloProvisional: isEloProvisional(played),
       };
+    },
+    enabled: !!userId,
+  });
+}
+
+// Personal "PR" style highlights: longest win streak and busiest month are
+// derived from confirmed match_results directly; best ELO gain comes from
+// elo_history (0020), which only starts logging from when it was applied —
+// so it's null until a player has at least one confirmed match since then.
+export function usePersonalRecords(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["personalRecords", userId],
+    queryFn: async () => {
+      const { data: resultsData, error: resultsError } = await supabase
+        .from("match_results")
+        .select("*")
+        .eq("status", "confirmed")
+        .or(
+          `team_a_player1.eq.${userId},team_a_player2.eq.${userId},team_b_player1.eq.${userId},team_b_player2.eq.${userId}`
+        )
+        .order("created_at", { ascending: true });
+      if (resultsError) throw resultsError;
+      const results = (resultsData as MatchResult[]) ?? [];
+
+      let longestWinStreak = 0;
+      let currentStreak = 0;
+      const countByMonth = new Map<string, number>();
+      for (const result of results) {
+        if (didWin(result, userId!)) {
+          currentStreak += 1;
+          longestWinStreak = Math.max(longestWinStreak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+        const month = result.created_at.slice(0, 7);
+        countByMonth.set(month, (countByMonth.get(month) ?? 0) + 1);
+      }
+
+      let busiestMonth: { label: string; count: number } | null = null;
+      for (const [month, count] of countByMonth) {
+        if (!busiestMonth || count > busiestMonth.count) {
+          const label = new Date(`${month}-01`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+          busiestMonth = { label, count };
+        }
+      }
+
+      const { data: eloData, error: eloError } = await supabase
+        .from("elo_history")
+        .select("*")
+        .eq("profile_id", userId!)
+        .order("delta", { ascending: false })
+        .limit(1);
+      if (eloError) throw eloError;
+      const bestEloEntry = ((eloData as EloHistoryEntry[]) ?? [])[0];
+      const bestEloGain =
+        bestEloEntry && bestEloEntry.delta > 0 ? { delta: bestEloEntry.delta, createdAt: bestEloEntry.created_at } : null;
+
+      return { longestWinStreak, busiestMonth, bestEloGain };
     },
     enabled: !!userId,
   });

@@ -27,6 +27,7 @@ import {
   useSendPartnerRequest,
   useFollowerCount,
   useFollowingCount,
+  usePersonalRecords,
 } from '@/lib/queries';
 import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS } from '@/constants/achievements';
 import { LEVEL_LABELS } from '@/constants/levels';
@@ -84,6 +85,7 @@ export default function PlayerProfileScreen() {
   const { data: requests } = usePartnerRequests(currentUserId);
   const { data: followerCount } = useFollowerCount(id);
   const { data: followingCount } = useFollowingCount(id);
+  const { data: records } = usePersonalRecords(id);
 
   // Mutations
   const followPlayer = useFollowPlayer();
@@ -92,6 +94,17 @@ export default function PlayerProfileScreen() {
 
   const isCalibrating = isEloProvisional(stats?.played ?? 0);
   const miniAnimatedHeights = useRef(Array.from({ length: 4 }).map(() => new Animated.Value(4))).current;
+
+  const recordItems: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string }[] = [];
+  if (records?.longestWinStreak) {
+    recordItems.push({ icon: 'flame', value: `${records.longestWinStreak} wins`, label: 'Longest streak' });
+  }
+  if (records?.busiestMonth) {
+    recordItems.push({ icon: 'calendar', value: `${records.busiestMonth.count} matches`, label: records.busiestMonth.label });
+  }
+  if (records?.bestEloGain) {
+    recordItems.push({ icon: 'flash', value: `+${records.bestEloGain.delta} ELO`, label: 'Best ELO gain' });
+  }
 
   useEffect(() => {
     if (!isCalibrating) return;
@@ -365,6 +378,25 @@ export default function PlayerProfileScreen() {
           </Pressable>
         </View>
 
+        {/* RECORDS */}
+        {recordItems.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Personal records</Text>
+            <View style={styles.recordsCardContainer}>
+              {recordItems.map((item, index) => (
+                <View key={item.label} style={styles.recordItem}>
+                  {index > 0 && <View style={styles.statDivider} />}
+                  <View style={styles.recordColumn}>
+                    <Ionicons name={item.icon} size={18} color={theme.accent} />
+                    <Text style={styles.recordValue}>{item.value}</Text>
+                    <Text style={styles.recordLabel}>{item.label}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* 6. REVIEWS / RECENT MATCHES SECTION */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Recent matches</Text>
@@ -637,6 +669,22 @@ const styles = StyleSheet.create({
   socialStatColumn: { alignItems: 'center' },
   socialStatValue: { fontSize: 15, fontWeight: '800', color: theme.text },
   socialStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  recordsCardContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.card,
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginTop: 10,
+  },
+  recordItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  recordColumn: { flex: 1, alignItems: 'center' },
+  recordValue: { fontSize: 13, fontWeight: '800', color: theme.text, marginTop: 6, textAlign: 'center' },
+  recordLabel: { fontSize: 10, fontWeight: '500', color: theme.textMuted, marginTop: 2, textAlign: 'center' },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

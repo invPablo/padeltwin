@@ -169,6 +169,15 @@ export interface Vib {
   created_at: string;
 }
 
+export interface EloHistoryEntry {
+  id: string;
+  profile_id: string;
+  match_result_id: string;
+  delta: number;
+  elo_after: number;
+  created_at: string;
+}
+
 export interface League {
   id: string;
   name: string;
