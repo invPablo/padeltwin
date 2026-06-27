@@ -34,7 +34,13 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "PadelTwin Admin",
+      "shortName": "PT Admin",
+      "display": "standalone",
+      "startUrl": "/(admin)",
+      "themeColor": "#FF7A1A",
+      "backgroundColor": "#0D0D0D"
     },
     "plugins": [
       "expo-router",
