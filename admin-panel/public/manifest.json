@@ -1,7 +1,7 @@
 {
-  "name": "PadelTwin Admin",
-  "short_name": "PT Admin",
-  "start_url": "/(admin)",
+  "name": "PadelTwin God Mode",
+  "short_name": "God Mode",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0D0D0D",
   "theme_color": "#FF7A1A",

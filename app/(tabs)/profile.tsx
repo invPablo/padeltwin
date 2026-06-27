@@ -679,12 +679,6 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {profile?.is_admin && (
-          <Pressable style={styles.adminBanner} onPress={() => router.push('/(admin)' as any)}>
-            <Text style={styles.adminBannerText}>🛠 GOD MODE — ADMIN PANEL →</Text>
-          </Pressable>
-        )}
-
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>PRIVACY & SAFETY</Text>
 
@@ -924,8 +918,6 @@ const styles = StyleSheet.create({
   cardTimeText: { fontSize: 9, fontWeight: '500', color: theme.textMuted },
   emptyText: { color: theme.textMuted, fontSize: 12, fontStyle: 'italic' },
   section: { backgroundColor: theme.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.border },
-  adminBanner: { backgroundColor: theme.accent, borderRadius: 16, padding: 16, alignItems: 'center' },
-  adminBannerText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '800',
