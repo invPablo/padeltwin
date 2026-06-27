@@ -3,9 +3,24 @@ import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, V
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSession } from '@/lib/useSession';
-import { useProfile, useMyStats, useRecentResults, useLeaderboard, useMyUpcomingMatches, usePartnerRequests, useActivityFeed, useMyLeagues } from '@/lib/queries';
+import {
+  useProfile,
+  useMyStats,
+  useRecentResults,
+  useLeaderboard,
+  useMyUpcomingMatches,
+  usePartnerRequests,
+  useActivityFeed,
+  useMyLeagues,
+  useFollowing,
+  useFollowPlayer,
+  useCompatiblePlayers,
+  useToggleVib,
+  useFollowedLeaderboard,
+  type FeedItem,
+} from '@/lib/queries';
 import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS } from '@/constants/achievements';
-import type { MatchResultWithProfiles } from '@/types/database';
+import type { MatchResultWithProfiles, Profile } from '@/types/database';
 import { theme, cardRadius } from '@/constants/theme';
 import { ELO_PROVISIONAL_MATCHES } from '@/constants/elo';
 import { ProBadge } from '@/components/ProBadge';
@@ -22,6 +37,14 @@ function opponents(result: MatchResultWithProfiles, userId: string) {
     ? [result.team_b_player1_profile, result.team_b_player2_profile]
     : [result.team_a_player1_profile, result.team_a_player2_profile];
   return rivals.map((p) => p?.full_name ?? 'Player').join(' / ');
+}
+
+function teamLabel(p1: MatchResultWithProfiles['team_a_player1_profile'], p2: typeof p1) {
+  return [p1?.full_name, p2?.full_name].filter(Boolean).join(' & ') || 'Players';
+}
+
+function scoreline(result: MatchResultWithProfiles) {
+  return result.sets.map((s) => `${s.a}-${s.b}`).join(', ');
 }
 
 function formatRelativeTime(dateString: string) {
@@ -49,7 +72,27 @@ export default function HomeScreen() {
   const { data: partnerRequests } = usePartnerRequests(userId);
   const { data: activityFeed, isLoading: feedLoading } = useActivityFeed(userId, 5);
   const { data: myLeagues, isLoading: leaguesLoading } = useMyLeagues(userId);
+  const { data: following } = useFollowing(userId);
+  const { data: compatiblePlayers } = useCompatiblePlayers(userId, profile);
+  const { data: followedLeaderboard } = useFollowedLeaderboard(userId);
+  const followPlayer = useFollowPlayer();
+  const toggleVib = useToggleVib();
   const pendingRequestsCount = (partnerRequests ?? []).filter((r) => r.status === 'pending' && r.to_id === userId).length;
+
+  const suggestedFollows: Profile[] = (compatiblePlayers ?? [])
+    .filter((p) => !following?.has(p.id))
+    .sort((a, b) => b.elo - a.elo)
+    .slice(0, 6);
+
+  function handleToggleVib(item: FeedItem) {
+    if (!userId) return;
+    toggleVib.mutate({ profileId: userId, itemType: item.kind, itemId: item.id, currentlyVibbed: item.vibbedByMe });
+  }
+
+  function handleQuickFollow(followedId: string) {
+    if (!userId) return;
+    followPlayer.mutate({ followerId: userId, followedId });
+  }
 
   const animatedHeights = useRef(Array.from({ length: 8 }).map(() => new Animated.Value(8))).current;
   const miniAnimatedHeights = useRef(Array.from({ length: 4 }).map(() => new Animated.Value(4))).current;
@@ -521,37 +564,95 @@ export default function HomeScreen() {
       ) : activityFeed && activityFeed.length > 0 ? (
         <View style={styles.feedContainer}>
           {activityFeed.map((item) => {
-            const iconName = ACHIEVEMENT_ICONS[item.type] || 'trophy';
-            const labelText = ACHIEVEMENT_LABELS[item.type] || 'New Achievement';
-            const playerName = item.profiles?.full_name ?? 'Player';
-            
+            let iconName: string;
+            let avatarProfile: Profile | null | undefined;
+            let primaryText: string;
+            let secondaryText: string;
+
+            if (item.kind === 'achievement') {
+              iconName = ACHIEVEMENT_ICONS[item.type] || 'trophy';
+              avatarProfile = item.profiles;
+              primaryText = (item.profiles?.full_name ?? 'Player').toUpperCase();
+              secondaryText = ACHIEVEMENT_LABELS[item.type] || 'New Achievement';
+            } else {
+              iconName = 'medal';
+              avatarProfile = item.winner === 'a' ? item.team_a_player1_profile : item.team_b_player1_profile;
+              primaryText = (
+                item.winner === 'a'
+                  ? teamLabel(item.team_a_player1_profile, item.team_a_player2_profile)
+                  : teamLabel(item.team_b_player1_profile, item.team_b_player2_profile)
+              ).toUpperCase();
+              secondaryText = `beat ${
+                item.winner === 'a'
+                  ? teamLabel(item.team_b_player1_profile, item.team_b_player2_profile)
+                  : teamLabel(item.team_a_player1_profile, item.team_a_player2_profile)
+              } ${scoreline(item)}`;
+            }
+            const playerName = avatarProfile?.full_name ?? 'Player';
+
             return (
-              <View key={item.id} style={styles.feedRow}>
+              <View key={`${item.kind}-${item.id}`} style={styles.feedRow}>
                 <View style={styles.feedAvatar}>
-                  {item.profiles?.avatar_url ? (
-                    <Image source={{ uri: item.profiles.avatar_url }} style={styles.feedAvatarImg} />
+                  {avatarProfile?.avatar_url ? (
+                    <Image source={{ uri: avatarProfile.avatar_url }} style={styles.feedAvatarImg} />
                   ) : (
                     <View style={styles.feedAvatarPlaceholder}>
-                      <Text style={styles.feedAvatarText}>
-                        {playerName.slice(0, 1).toUpperCase()}
-                      </Text>
+                      <Text style={styles.feedAvatarText}>{playerName.slice(0, 1).toUpperCase()}</Text>
                     </View>
                   )}
                 </View>
                 <View style={styles.feedInfo}>
                   <Text style={styles.feedText} numberOfLines={1}>
-                    <Text style={styles.feedPlayerName}>{playerName.toUpperCase()}</Text>
+                    <Text style={styles.feedPlayerName}>{primaryText}</Text>
                     <Text style={styles.feedLabelSeparator}> • </Text>
-                    <Text style={styles.feedAchievementText}>{labelText}</Text>
+                    <Text style={styles.feedAchievementText}>{secondaryText}</Text>
                   </Text>
                   <Text style={styles.feedTime}>{formatRelativeTime(item.created_at)}</Text>
                 </View>
-                <View style={styles.feedIconContainer}>
-                  <Ionicons name={iconName as any} size={14} color={theme.primary} />
+                <View style={styles.feedTrailing}>
+                  <View style={styles.feedIconContainer}>
+                    <Ionicons name={iconName as any} size={14} color={theme.primary} />
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.vibButton, item.vibbedByMe && styles.vibButtonActive, pressed && { opacity: 0.8 }]}
+                    onPress={() => handleToggleVib(item)}
+                  >
+                    <Ionicons name={item.vibbedByMe ? 'heart' : 'heart-outline'} size={14} color={item.vibbedByMe ? theme.primary : theme.textMuted} />
+                    {item.vibCount > 0 && <Text style={[styles.vibCount, item.vibbedByMe && styles.vibCountActive]}>{item.vibCount}</Text>}
+                  </Pressable>
                 </View>
               </View>
             );
           })}
+        </View>
+      ) : suggestedFollows.length > 0 ? (
+        <View style={{ marginBottom: 20 }}>
+          <Text style={styles.emptyFeedSubtitle}>
+            Follow other players to see their achievements and match results here.
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestedScroll}>
+            {suggestedFollows.map((p) => (
+              <View key={p.id} style={styles.suggestedCard}>
+                <Pressable onPress={() => router.push(`/player/${p.id}` as any)}>
+                  {p.avatar_url ? (
+                    <Image source={{ uri: p.avatar_url }} style={styles.suggestedAvatarImg} />
+                  ) : (
+                    <View style={styles.suggestedAvatarPlaceholder}>
+                      <Text style={styles.feedAvatarText}>{(p.full_name ?? '?').slice(0, 1).toUpperCase()}</Text>
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.suggestedName} numberOfLines={1}>{(p.full_name ?? 'Player').toUpperCase()}</Text>
+                <Text style={styles.suggestedMeta}>{p.elo} ELO</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.suggestedFollowButton, pressed && { opacity: 0.8 }]}
+                  onPress={() => handleQuickFollow(p.id)}
+                >
+                  <Text style={styles.suggestedFollowButtonText}>FOLLOW</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
         </View>
       ) : (
         <View style={styles.emptyFeedContainer}>
@@ -560,7 +661,7 @@ export default function HomeScreen() {
           <Text style={styles.emptyFeedSubtitle}>
             Follow other padel players to see their live achievements and match milestones in your home feed.
           </Text>
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
               styles.emptyFeedButton,
               pressed && { opacity: 0.8 }
@@ -570,6 +671,39 @@ export default function HomeScreen() {
             <Text style={styles.emptyFeedButtonText}>FIND PLAYERS</Text>
           </Pressable>
         </View>
+      )}
+
+      {followedLeaderboard && followedLeaderboard.length > 1 && (
+        <>
+          <Text style={styles.sectionTitle}>RANKING AMONG FRIENDS</Text>
+          <View style={styles.leaderboardContainer}>
+            {followedLeaderboard.map((p, index) => {
+              const rank = index + 1;
+              const isMe = p.id === userId;
+              return (
+                <View
+                  key={p.id}
+                  style={[
+                    styles.leaderboardRow,
+                    rank === followedLeaderboard.length && { borderBottomWidth: 0 },
+                    isMe && styles.leaderboardRowMe,
+                  ]}
+                >
+                  <Text style={[styles.rankText, rank <= 3 && styles.rankTextTop]}>{rank < 10 ? `0${rank}` : rank}</Text>
+                  <View style={styles.playerAvatarPlaceholder}>
+                    <Text style={styles.avatarLetter}>{(p.full_name ?? '?').slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.leaderboardName} numberOfLines={1}>
+                    {isMe ? 'YOU' : (p.full_name ?? 'Player').toUpperCase()}
+                  </Text>
+                  {p.is_pro && <ProBadge size="sm" />}
+                  {p.coach_status === 'approved' && <CoachBadge size="sm" />}
+                  <Text style={styles.leaderboardElo}>{p.elo} <Text style={{ fontSize: 9, color: theme.textMuted }}>ELO</Text></Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
       )}
 
       <View style={styles.leaguesSectionHeader}>
@@ -1000,6 +1134,92 @@ const styles = StyleSheet.create({
     color: theme.textMuted,
     marginTop: 2,
     fontWeight: '600',
+  },
+  feedTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  vibButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  vibButtonActive: {
+    borderColor: theme.primary,
+    backgroundColor: 'rgba(255, 92, 0, 0.08)',
+  },
+  vibCount: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: theme.textMuted,
+  },
+  vibCountActive: {
+    color: theme.primary,
+  },
+  suggestedScroll: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  suggestedCard: {
+    width: 96,
+    backgroundColor: theme.card,
+    borderRadius: cardRadius,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 10,
+    alignItems: 'center',
+  },
+  suggestedAvatarImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginBottom: 6,
+  },
+  suggestedAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E1E28',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginBottom: 6,
+  },
+  suggestedName: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: theme.text,
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  suggestedMeta: {
+    fontSize: 9,
+    color: theme.textMuted,
+    marginBottom: 8,
+  },
+  suggestedFollowButton: {
+    backgroundColor: 'rgba(255, 92, 0, 0.1)',
+    borderWidth: 1,
+    borderColor: theme.primary,
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  suggestedFollowButtonText: {
+    color: theme.primary,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  leaderboardRowMe: {
+    backgroundColor: 'rgba(255, 92, 0, 0.06)',
   },
   feedIconContainer: {
     width: 24,

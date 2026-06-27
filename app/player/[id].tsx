@@ -25,6 +25,8 @@ import {
   useUnfollowPlayer,
   usePartnerRequests,
   useSendPartnerRequest,
+  useFollowerCount,
+  useFollowingCount,
 } from '@/lib/queries';
 import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS } from '@/constants/achievements';
 import { LEVEL_LABELS } from '@/constants/levels';
@@ -80,6 +82,8 @@ export default function PlayerProfileScreen() {
   const { data: achievements } = useMyAchievements(id);
   const { data: following } = useFollowing(currentUserId);
   const { data: requests } = usePartnerRequests(currentUserId);
+  const { data: followerCount } = useFollowerCount(id);
+  const { data: followingCount } = useFollowingCount(id);
 
   // Mutations
   const followPlayer = useFollowPlayer();
@@ -341,6 +345,24 @@ export default function PlayerProfileScreen() {
             <Text style={styles.statHugeText}>{stats?.winRate ?? 0}%</Text>
             <Text style={styles.statSubLabel}>Win Rate</Text>
           </View>
+        </View>
+
+        {/* SOCIAL */}
+        <View style={styles.socialStatsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/social/${id}?type=followers` as any)}
+          >
+            <Text style={styles.socialStatValue}>{followerCount ?? 0}</Text>
+            <Text style={styles.socialStatLabel}>Followers</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/social/${id}?type=following` as any)}
+          >
+            <Text style={styles.socialStatValue}>{followingCount ?? 0}</Text>
+            <Text style={styles.socialStatLabel}>Following</Text>
+          </Pressable>
         </View>
 
         {/* 6. REVIEWS / RECENT MATCHES SECTION */}
@@ -611,6 +633,10 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: theme.border,
   },
+  socialStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 10 },
+  socialStatColumn: { alignItems: 'center' },
+  socialStatValue: { fontSize: 15, fontWeight: '800', color: theme.text },
+  socialStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

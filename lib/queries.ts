@@ -18,7 +18,12 @@ import type {
   RequestStatus,
   SetScore,
   Team,
+  VibItemType,
 } from "../types/database";
+
+export type FeedItem =
+  | ({ kind: "achievement"; vibCount: number; vibbedByMe: boolean } & AchievementWithProfile)
+  | ({ kind: "match_result"; vibCount: number; vibbedByMe: boolean } & MatchResultWithProfiles);
 
 const LEVEL_ORDER: PlayerLevel[] = ["iniciacion", "intermedio", "avanzado"];
 
@@ -462,10 +467,12 @@ export function useLeaderboard(zone: string | null | undefined) {
   });
 }
 
-// System-generated activity feed (milestones awarded by the DB trigger in
-// 0008_achievements.sql) — no user-authored posts, so it's never empty and
-// needs no moderation. Scoped to players the current user follows (see
-// 0009_follows.sql), not by zone — an empty following list means an empty feed.
+// Activity feed combining two sources scoped to players the current user
+// follows (see 0009_follows.sql): system-generated achievement milestones
+// (0008_achievements.sql) and confirmed match results (0018's pending/
+// confirmed/disputed flow — only confirmed results are real activity, the
+// same gate the leaderboard and achievements use). Not by zone — an empty
+// following list means an empty feed.
 export function useActivityFeed(userId: string | undefined, limit = 20) {
   return useQuery({
     queryKey: ["activityFeed", userId, limit],
@@ -477,16 +484,161 @@ export function useActivityFeed(userId: string | undefined, limit = 20) {
       if (followError) throw followError;
 
       const followedIds = (following ?? []).map((f) => f.followed_id);
-      if (followedIds.length === 0) return [];
+      if (followedIds.length === 0) return [] as FeedItem[];
 
-      const { data, error } = await supabase
-        .from("achievements")
-        .select("*, profiles(*)")
-        .in("profile_id", followedIds)
-        .order("created_at", { ascending: false })
-        .limit(limit);
+      const resultsOrFilter = followedIds
+        .map(
+          (id) =>
+            `team_a_player1.eq.${id},team_a_player2.eq.${id},team_b_player1.eq.${id},team_b_player2.eq.${id}`
+        )
+        .join(",");
+
+      const [achievementsRes, resultsRes] = await Promise.all([
+        supabase
+          .from("achievements")
+          .select("*, profiles(*)")
+          .in("profile_id", followedIds)
+          .order("created_at", { ascending: false })
+          .limit(limit),
+        supabase
+          .from("match_results")
+          .select(RESULT_PROFILES_SELECT)
+          .eq("status", "confirmed")
+          .or(resultsOrFilter)
+          .order("created_at", { ascending: false })
+          .limit(limit),
+      ]);
+      if (achievementsRes.error) throw achievementsRes.error;
+      if (resultsRes.error) throw resultsRes.error;
+
+      const achievementItems = ((achievementsRes.data as unknown as AchievementWithProfile[]) ?? []).map(
+        (a) => ({ ...a, kind: "achievement" as const, vibCount: 0, vibbedByMe: false })
+      );
+      const resultItems = ((resultsRes.data as unknown as MatchResultWithProfiles[]) ?? []).map((r) => ({
+        ...r,
+        kind: "match_result" as const,
+        vibCount: 0,
+        vibbedByMe: false,
+      }));
+
+      const merged: FeedItem[] = [...achievementItems, ...resultItems]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
+
+      if (merged.length === 0) return merged;
+
+      const { data: vibs, error: vibsError } = await supabase
+        .from("vibs")
+        .select("item_id, item_type, profile_id")
+        .in("item_id", merged.map((item) => item.id));
+      if (vibsError) throw vibsError;
+
+      return merged.map((item) => {
+        const itemVibs = (vibs ?? []).filter((v) => v.item_id === item.id && v.item_type === item.kind);
+        return { ...item, vibCount: itemVibs.length, vibbedByMe: itemVibs.some((v) => v.profile_id === userId) };
+      });
+    },
+    enabled: !!userId,
+  });
+}
+
+// Give or remove a Vib (kudos-equivalent) on a feed item. Polymorphic over
+// item_type so the same mutation works for achievements and match results —
+// see 0019_vibs_and_feed.sql.
+export function useToggleVib() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { profileId: string; itemType: VibItemType; itemId: string; currentlyVibbed: boolean }) => {
+      if (vars.currentlyVibbed) {
+        const { error } = await supabase
+          .from("vibs")
+          .delete()
+          .eq("profile_id", vars.profileId)
+          .eq("item_type", vars.itemType)
+          .eq("item_id", vars.itemId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("vibs")
+          .insert({ profile_id: vars.profileId, item_type: vars.itemType, item_id: vars.itemId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activityFeed"] });
+    },
+  });
+}
+
+// Cheap counts for profile/player screens — no schema needed, just a head-only count.
+export function useFollowerCount(profileId: string | undefined) {
+  return useQuery({
+    queryKey: ["followerCount", profileId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("followed_id", profileId!);
       if (error) throw error;
-      return data as unknown as AchievementWithProfile[];
+      return count ?? 0;
+    },
+    enabled: !!profileId,
+  });
+}
+
+export function useFollowingCount(profileId: string | undefined) {
+  return useQuery({
+    queryKey: ["followingCount", profileId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("follower_id", profileId!);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!profileId,
+  });
+}
+
+// Full profiles of who follows the given user — mirrors useFollowedProfiles()
+// but joins the other direction, for a "Followers" list.
+export function useFollowers(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["followers", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("follows")
+        .select("profiles!follows_follower_id_fkey(*)")
+        .eq("followed_id", userId!);
+      if (error) throw error;
+      return (data ?? []).map((f: any) => f.profiles as Profile);
+    },
+    enabled: !!userId,
+  });
+}
+
+// Mini-leaderboard scoped to people the current user follows (plus themself).
+// No 5-confirmed-match eligibility gate like the public leaderboard — this is
+// a friends view, not a public ranking, so provisional players stay visible.
+export function useFollowedLeaderboard(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["followedLeaderboard", userId],
+    queryFn: async () => {
+      const { data: following, error: followError } = await supabase
+        .from("follows")
+        .select("followed_id")
+        .eq("follower_id", userId);
+      if (followError) throw followError;
+
+      const ids = [...(following ?? []).map((f) => f.followed_id), userId];
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", ids)
+        .order("elo", { ascending: false });
+      if (error) throw error;
+      return data as Profile[];
     },
     enabled: !!userId,
   });

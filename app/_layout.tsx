@@ -93,6 +93,10 @@ function RootNavigator() {
         name="coach/[id]"
         options={{ title: 'Coach', contentStyle: { paddingBottom: insets.bottom } }}
       />
+      <Stack.Screen
+        name="social/[id]"
+        options={{ title: 'Players', contentStyle: { paddingBottom: insets.bottom } }}
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

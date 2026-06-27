@@ -31,6 +31,8 @@ import {
   useStopCoaching,
   useMyCoachLeads,
   useUpdateLeadStatus,
+  useFollowerCount,
+  useFollowingCount,
 } from '@/lib/queries';
 import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS } from '@/constants/achievements';
 import { supabase } from '@/lib/supabase';
@@ -77,6 +79,8 @@ export default function ProfileScreen() {
   const { data: myAchievements, isLoading: achievementsLoading } = useMyAchievements(userId);
   const { data: stats, isLoading: statsLoading } = useMyStats(userId);
   const { data: recentResults, isLoading: resultsLoading } = useRecentResults(userId, 8);
+  const { data: followerCount } = useFollowerCount(userId);
+  const { data: followingCount } = useFollowingCount(userId);
   const respondRequest = useRespondPartnerRequest();
   const { data: hiddenChats } = useHiddenChats(userId);
   const hideChat = useHideChat();
@@ -317,6 +321,24 @@ export default function ProfileScreen() {
               </View>
             </>
           )}
+        </View>
+
+        {/* SOCIAL */}
+        <View style={styles.socialStatsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/social/${userId}?type=followers` as any)}
+          >
+            <Text style={styles.socialStatValue}>{followerCount ?? 0}</Text>
+            <Text style={styles.socialStatLabel}>Followers</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/social/${userId}?type=following` as any)}
+          >
+            <Text style={styles.socialStatValue}>{followingCount ?? 0}</Text>
+            <Text style={styles.socialStatLabel}>Following</Text>
+          </Pressable>
         </View>
 
         {/* RECENT MATCHES */}
@@ -797,6 +819,10 @@ const styles = StyleSheet.create({
   statHugeText: { fontSize: 22, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
   statSubLabel: { fontSize: 11, fontWeight: '500', color: theme.textMuted, marginTop: 4 },
   statDivider: { width: 1.5, height: 32, backgroundColor: theme.border },
+  socialStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 10 },
+  socialStatColumn: { alignItems: 'center' },
+  socialStatValue: { fontSize: 15, fontWeight: '800', color: theme.text },
+  socialStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.text },
   horizontalScroll: { gap: 12, paddingBottom: 4 },

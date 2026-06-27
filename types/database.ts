@@ -159,6 +159,16 @@ export interface Follow {
   created_at: string;
 }
 
+export type VibItemType = "achievement" | "match_result";
+
+export interface Vib {
+  id: string;
+  profile_id: string;
+  item_type: VibItemType;
+  item_id: string;
+  created_at: string;
+}
+
 export interface League {
   id: string;
   name: string;
