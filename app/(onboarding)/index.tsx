@@ -16,8 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSession } from '@/lib/useSession';
 import { useProfile, useUpdateProfile } from '@/lib/queries';
 import { pickAndUploadAvatar } from '@/lib/uploadAvatar';
-import { useDetectCity } from '@/lib/useLocation';
-import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { VerifiedLocation } from '@/components/VerifiedLocation';
 import { theme, buttonRadius, chipRadius, cardRadius } from '@/constants/theme';
 import { LEVELS, LEVEL_LABELS, LEVEL_DESCRIPTIONS } from '@/constants/levels';
 import {
@@ -48,7 +47,6 @@ export default function OnboardingScreen() {
   const userId = session?.user.id;
   const { data: profile } = useProfile(userId);
   const updateProfile = useUpdateProfile();
-  const { detectCity, loading: locating } = useDetectCity();
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -64,6 +62,7 @@ export default function OnboardingScreen() {
   const [apparelBrand, setApparelBrand] = useState('');
   const [zone, setZone] = useState('');
   const [country, setCountry] = useState('');
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [lookingForPartner, setLookingForPartner] = useState(true);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
@@ -93,13 +92,13 @@ export default function OnboardingScreen() {
     }
   }
 
-  async function handleDetectLocation() {
-    const city = await detectCity();
-    if (city) setZone(city);
-  }
-
   function handleFinish() {
     if (!userId) return;
+    if (!zone || !country) {
+      setLocationError('Verify your location to continue — this keeps City/Country rankings honest.');
+      return;
+    }
+    setLocationError(null);
     updateProfile.mutate(
       {
         id: userId,
@@ -311,42 +310,21 @@ export default function OnboardingScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionHeader}>LOCATION</Text>
-        <Text style={styles.label}>CITY / ZONE</Text>
-        <CityAutocomplete
-          value={zone}
-          onChangeText={setZone}
-          focused={focusedInput === 'zone'}
-          onFocus={() => setFocusedInput('zone')}
-          onBlur={() => setFocusedInput(null)}
-          placeholder="e.g. Madrid"
-        />
-
-        <Text style={[styles.label, { marginTop: 14 }]}>COUNTRY</Text>
-        <TextInput
-          style={[styles.input, focusedInput === 'country' && styles.inputFocused]}
-          placeholder="e.g. Spain"
-          placeholderTextColor={theme.textMuted}
-          value={country}
-          onChangeText={setCountry}
-          onFocus={() => setFocusedInput('country')}
-          onBlur={() => setFocusedInput(null)}
-        />
-        <Text style={styles.helperText}>Used to rank you in your Country League.</Text>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.locationButton,
-            pressed && { opacity: 0.7 }
-          ]} 
-          onPress={handleDetectLocation} 
-          disabled={locating}
-        >
-          {locating ? (
-            <ActivityIndicator color={theme.accent} size="small" />
-          ) : (
-            <Text style={styles.locationButtonText}>🛰️ USE MY CURRENT LOCATION</Text>
-          )}
-        </Pressable>
+        <Text style={styles.helperText}>
+          Verified by GPS, not typed in — this is what keeps City/Country rankings fair for everyone.
+        </Text>
+        <View style={{ marginTop: 10 }}>
+          <VerifiedLocation
+            city={zone || null}
+            country={country || null}
+            onDetected={(loc) => {
+              setZone(loc.city);
+              setCountry(loc.country);
+              setLocationError(null);
+            }}
+          />
+        </View>
+        {locationError && <Text style={styles.locationErrorText}>{locationError}</Text>}
       </View>
 
       <View style={[styles.section, styles.switchRow]}>
@@ -445,8 +423,7 @@ const styles = StyleSheet.create({
   },
   chipText: { color: theme.textMuted, fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
   chipTextActive: { color: theme.primary, fontWeight: '900' },
-  locationButton: { marginTop: 14, alignSelf: 'flex-start', borderBottomWidth: 1, borderBottomColor: theme.primary, paddingBottom: 2 },
-  locationButtonText: { color: theme.primary, fontWeight: '900', fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
+  locationErrorText: { color: theme.danger, fontSize: 12, marginTop: 8, fontWeight: '600' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   button: { 
     backgroundColor: theme.primary, 

@@ -1318,27 +1318,6 @@ export function useCountryLeague(country: string | null | undefined) {
   });
 }
 
-// City autocomplete: suggests real cities already used by other players
-// instead of a free-text guess, so City/Country League grouping actually
-// matches up between players (no "Edinburgh" vs "edinburgh" vs "Edimburgo").
-export function useCitySuggestions(query: string) {
-  return useQuery({
-    queryKey: ["citySuggestions", query],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("zone")
-        .not("zone", "is", null)
-        .ilike("zone", `%${query}%`)
-        .limit(50);
-      if (error) throw error;
-      const unique = Array.from(new Set((data ?? []).map((r) => r.zone as string)));
-      return unique.sort().slice(0, 8);
-    },
-    enabled: query.length >= 2,
-  });
-}
-
 // KOP Thrones: across every club in the player's country, how many is this
 // player currently #1 in (their "throne")? Pulls the whole country's ranked
 // players in one query and finds the top player per club client-side,

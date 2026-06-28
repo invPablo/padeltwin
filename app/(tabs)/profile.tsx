@@ -46,7 +46,7 @@ import { theme, buttonRadius, cardRadius, chipRadius } from '@/constants/theme';
 import { LEVELS, LEVEL_LABELS, LEVEL_DESCRIPTIONS } from '@/constants/levels';
 import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
-import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { VerifiedLocation } from '@/components/VerifiedLocation';
 import { ELO_PROVISIONAL_MATCHES, isEloProvisional } from '@/constants/elo';
 
 function didWin(result: MatchResultWithProfiles, userId: string) {
@@ -422,24 +422,14 @@ export default function ProfileScreen() {
             onBlur={() => setFocusedInput(null)}
           />
 
-          <Text style={[styles.label, { marginTop: 14 }]}>CITY</Text>
-          <CityAutocomplete
-            value={zone}
-            onChangeText={setZone}
-            focused={focusedInput === 'city'}
-            onFocus={() => setFocusedInput('city')}
-            onBlur={() => setFocusedInput(null)}
-          />
-
-          <Text style={[styles.label, { marginTop: 14 }]}>COUNTRY</Text>
-          <TextInput
-            style={[styles.input, focusedInput === 'country' && styles.inputFocused]}
-            value={country}
-            onChangeText={setCountry}
-            placeholder="e.g. Spain"
-            placeholderTextColor={theme.textMuted}
-            onFocus={() => setFocusedInput('country')}
-            onBlur={() => setFocusedInput(null)}
+          <Text style={[styles.label, { marginTop: 14 }]}>LOCATION</Text>
+          <VerifiedLocation
+            city={zone || null}
+            country={country || null}
+            onDetected={(loc) => {
+              setZone(loc.city);
+              setCountry(loc.country);
+            }}
           />
 
           <Text style={[styles.label, { marginTop: 14 }]}>SKILL LEVEL</Text>
