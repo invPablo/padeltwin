@@ -1213,3 +1213,39 @@ export function useTournamentMatches(tournamentId: string | undefined) {
     enabled: !!tournamentId,
   });
 }
+
+export function useJoinTournament() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tournamentId,
+      profileId,
+      partnerId,
+    }: {
+      tournamentId: string;
+      profileId: string;
+      partnerId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("tournament_participants")
+        .insert({ tournament_id: tournamentId, profile_id: profileId, partner_id: partnerId });
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tournamentParticipants", variables.tournamentId] });
+    },
+  });
+}
+
+export function useLeaveTournament() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ participantId }: { participantId: string; tournamentId: string }) => {
+      const { error } = await supabase.from("tournament_participants").delete().eq("id", participantId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tournamentParticipants", variables.tournamentId] });
+    },
+  });
+}

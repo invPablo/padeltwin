@@ -1,23 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
 
 export function ProBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const iconSize = size === 'sm' ? 10 : 13;
   return (
     <View style={[styles.badge, size === 'sm' && styles.badgeSm]}>
-      <Text style={[styles.text, size === 'sm' && styles.textSm]}>PRO</Text>
+      <Ionicons name="checkmark" size={iconSize} color={theme.onAccent} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: theme.accent,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginLeft: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  badgeSm: { paddingHorizontal: 5, paddingVertical: 1.5, marginLeft: 4 },
-  text: { color: theme.onAccent, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  textSm: { fontSize: 8 },
+  badgeSm: { width: 15, height: 15, borderRadius: 7.5 },
 });

@@ -68,6 +68,7 @@ function TournamentDetail({ tournament, onBack, onChanged }: { tournament: Tourn
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [pairSelection, setPairSelection] = useState<string[]>([]);
 
   async function loadParticipants() {
     const { data } = await supabase
@@ -115,6 +116,21 @@ function TournamentDetail({ tournament, onBack, onChanged }: { tournament: Tourn
     loadParticipants();
   }
 
+  function toggleForPairing(id: string) {
+    setPairSelection((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
+  }
+
+  async function pairSelected() {
+    if (pairSelection.length !== 2) return;
+    await supabase.rpc('admin_pair_tournament_participants', { p_participant_a: pairSelection[0], p_participant_b: pairSelection[1] });
+    setPairSelection([]);
+    loadParticipants();
+  }
+
   async function generate() {
     const fn = tournament.format === 'bracket' ? 'admin_generate_bracket' : 'admin_generate_round_robin';
     await supabase.rpc(fn, { p_tournament_id: tournament.id });
@@ -140,10 +156,14 @@ function TournamentDetail({ tournament, onBack, onChanged }: { tournament: Tourn
         {tournament.format === 'bracket' ? 'Bracket' : 'Round robin'} · {tournament.status}
       </p>
 
-      {tournament.status === 'draft' && (
+      {tournament.status === 'open' && (
         <div className="card">
           <p className="label" style={{ marginTop: 0 }}>
             PARTICIPANTS ({participants.length})
+          </p>
+          <p className="subtitle" style={{ marginTop: 0 }}>
+            Players register themselves from the app. Add anyone manually below, or select two solo entrants to pair
+            them up together.
           </p>
           <input className="full-width" placeholder="Search player to add…" value={query} onChange={(e) => search(e.target.value)} />
           {searchResults.map((p) => (
@@ -156,9 +176,12 @@ function TournamentDetail({ tournament, onBack, onChanged }: { tournament: Tourn
           <div style={{ marginTop: 10 }}>
             {participants.map((p) => (
               <div key={p.id} className="row" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                <span className="row" style={{ justifyContent: 'flex-start', gap: 8, fontSize: 13, fontWeight: 600 }}>
+                  {!p.partner_id && (
+                    <input type="checkbox" checked={pairSelection.includes(p.id)} onChange={() => toggleForPairing(p.id)} />
+                  )}
                   {p.profile?.full_name ?? 'Player'}
-                  {p.partner ? ` / ${p.partner.full_name ?? 'Partner'}` : ''}
+                  {p.partner ? ` / ${p.partner.full_name ?? 'Partner'}` : ' (solo)'}
                 </span>
                 <button className="btn btn-outline" onClick={() => removeParticipant(p.id)}>
                   ✕
@@ -167,13 +190,19 @@ function TournamentDetail({ tournament, onBack, onChanged }: { tournament: Tourn
             ))}
           </div>
 
+          {pairSelection.length === 2 && (
+            <button className="btn btn-outline full-width" style={{ marginTop: 12 }} onClick={pairSelected}>
+              PAIR SELECTED TWO TOGETHER
+            </button>
+          )}
+
           <button className="btn btn-accent full-width" style={{ marginTop: 16, padding: 14 }} disabled={participants.length < 2} onClick={generate}>
-            GENERATE MATCHES
+            CLOSE REGISTRATION & GENERATE MATCHES
           </button>
         </div>
       )}
 
-      {tournament.status !== 'draft' &&
+      {tournament.status !== 'open' && tournament.status !== 'draft' &&
         rounds.map((round) => (
           <div className="card" key={round}>
             <p className="label" style={{ marginTop: 0 }}>

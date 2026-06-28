@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushToken(): Promise<string | null> {
-  if (!Device.isDevice) return null;
+  if (Platform.OS === 'web' || !Device.isDevice) return null;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {

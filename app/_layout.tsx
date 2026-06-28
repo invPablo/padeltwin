@@ -1,6 +1,7 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
+import { Anton_400Regular } from '@expo-google-fonts/anton';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -29,6 +30,8 @@ const navigationDarkTheme = {
 export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Coubra: require('../assets/fonts/CoubraFont.otf'),
+    Anton_400Regular,
   });
 
   useEffect(() => {
@@ -61,7 +64,7 @@ function RootNavigator() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
-        headerTitleStyle: { fontWeight: '800' as any, fontSize: 18 },
+        headerTitleStyle: { fontFamily: 'Anton_400Regular', fontWeight: '800' as any, fontSize: 18 },
         headerShadowVisible: false,
       }}
     >

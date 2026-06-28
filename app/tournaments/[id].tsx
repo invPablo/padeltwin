@@ -1,9 +1,17 @@
+import { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSession } from '@/lib/useSession';
-import { useTournament, useTournamentMatches, useTournamentParticipants } from '@/lib/queries';
-import { theme, cardRadius } from '@/constants/theme';
-import type { TournamentMatch, TournamentParticipantWithProfiles } from '@/types/database';
+import {
+  useJoinTournament,
+  useLeaveTournament,
+  usePartnerRequests,
+  useTournament,
+  useTournamentMatches,
+  useTournamentParticipants,
+} from '@/lib/queries';
+import { theme, cardRadius, chipRadius } from '@/constants/theme';
+import type { PartnerRequestWithProfiles, TournamentMatch, TournamentParticipantWithProfiles } from '@/types/database';
 
 function entrantName(participants: TournamentParticipantWithProfiles[], entrantId: string | null) {
   if (!entrantId) return 'TBD';
@@ -46,31 +54,127 @@ function MatchRow({
 export default function TournamentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
+  const userId = session?.user.id;
   const { data: tournament } = useTournament(id);
   const { data: participants } = useTournamentParticipants(id);
   const { data: matches, isLoading } = useTournamentMatches(id);
+  const { data: requests } = usePartnerRequests(userId);
+  const joinTournament = useJoinTournament();
+  const leaveTournament = useLeaveTournament();
+
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
 
   if (!tournament || isLoading) return <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />;
 
-  const myParticipant = participants?.find((p) => p.profile_id === session?.user.id || p.partner_id === session?.user.id);
+  const myPartners = (requests ?? [])
+    .filter((r): r is PartnerRequestWithProfiles => r.status === 'accepted')
+    .map((r) => (r.from_id === userId ? r.to_profile : r.from_profile))
+    .filter((p): p is NonNullable<typeof p> => !!p);
+
+  const myParticipant = participants?.find((p) => p.profile_id === userId || p.partner_id === userId);
   const myEntrantId = myParticipant?.id ?? null;
+  const isOpen = tournament.status === 'open';
 
   const rounds = Array.from(new Set((matches ?? []).map((m) => m.round))).sort((a, b) => a - b);
+
+  function handleJoin() {
+    if (!userId || !tournament) return;
+    joinTournament.mutate(
+      { tournamentId: tournament.id, profileId: userId, partnerId: selectedPartnerId },
+      {
+        onError: (e) => Alert.alert('Could not join', e instanceof Error ? e.message : 'Please try again.'),
+      }
+    );
+  }
+
+  function handleLeave() {
+    if (!myParticipant || !tournament) return;
+    Alert.alert('Leave tournament?', 'You can rejoin later while registration is still open.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: () => leaveTournament.mutate({ participantId: myParticipant.id, tournamentId: tournament.id }),
+      },
+    ]);
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, gap: 16 }}>
       <View>
         <Text style={styles.title}>{tournament.name}</Text>
         <Text style={styles.subtitle}>
-          {tournament.format === 'bracket' ? 'Knockout bracket' : 'Round robin'} · {tournament.status === 'completed' ? 'Completed' : 'In progress'}
+          {tournament.format === 'bracket' ? 'Knockout bracket' : 'Round robin'} ·{' '}
+          {tournament.status === 'completed' ? 'Completed' : tournament.status === 'open' ? 'Registration open' : 'In progress'}
         </Text>
       </View>
+
+      {isOpen && (
+        <View style={styles.section}>
+          {myParticipant ? (
+            <>
+              <Text style={styles.sectionTitle}>YOU'RE IN</Text>
+              <Text style={styles.participantText}>{entrantName(participants ?? [], myEntrantId)}</Text>
+              <Pressable
+                style={[styles.outlineBtn, leaveTournament.isPending && { opacity: 0.6 }]}
+                onPress={handleLeave}
+                disabled={leaveTournament.isPending}
+              >
+                <Text style={styles.outlineBtnText}>{leaveTournament.isPending ? 'Leaving…' : 'Leave Tournament'}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>JOIN THIS TOURNAMENT</Text>
+              <Text style={styles.helperText}>
+                Padel tournaments are played in pairs. Pick an accepted partner to register as a team, or join solo and
+                we'll pair you up.
+              </Text>
+              {myPartners.length > 0 && (
+                <View style={styles.chipRow}>
+                  <Pressable
+                    style={[styles.chip, selectedPartnerId === null && styles.chipActive]}
+                    onPress={() => setSelectedPartnerId(null)}
+                  >
+                    <Text style={[styles.chipText, selectedPartnerId === null && styles.chipTextActive]}>Solo</Text>
+                  </Pressable>
+                  {myPartners.map((p) => (
+                    <Pressable
+                      key={p.id}
+                      style={[styles.chip, selectedPartnerId === p.id && styles.chipActive]}
+                      onPress={() => setSelectedPartnerId(p.id)}
+                    >
+                      <Text style={[styles.chipText, selectedPartnerId === p.id && styles.chipTextActive]}>
+                        {p.full_name ?? 'Partner'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              <Pressable
+                style={[styles.joinBtn, joinTournament.isPending && { opacity: 0.6 }]}
+                onPress={handleJoin}
+                disabled={joinTournament.isPending}
+              >
+                {joinTournament.isPending ? (
+                  <ActivityIndicator color={theme.onAccent} />
+                ) : (
+                  <Text style={styles.joinBtnText}>
+                    {selectedPartnerId ? 'Join as a Pair' : 'Join Solo'}
+                  </Text>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>PLAYERS ({participants?.length ?? 0})</Text>
         {(participants ?? []).map((p) => (
           <Text key={p.id} style={[styles.participantText, p.id === myEntrantId && styles.participantTextMine]}>
             {entrantName(participants ?? [], p.id)}
+            {!p.partner_id ? ' (solo)' : ''}
           </Text>
         ))}
       </View>
@@ -95,8 +199,18 @@ const styles = StyleSheet.create({
   subtitle: { color: theme.textMuted, fontSize: 13, marginTop: 4 },
   section: { backgroundColor: theme.card, borderRadius: cardRadius, borderWidth: 1, borderColor: theme.border, padding: 16, gap: 8 },
   sectionTitle: { color: theme.accent, fontWeight: '900', fontSize: 12, letterSpacing: 0.5, marginBottom: 4 },
+  helperText: { color: theme.textMuted, fontSize: 12, lineHeight: 18 },
   participantText: { color: theme.text, fontSize: 13 },
   participantTextMine: { color: theme.accent, fontWeight: '800' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  chip: { borderWidth: 1, borderColor: theme.border, borderRadius: chipRadius, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: theme.background },
+  chipActive: { backgroundColor: theme.accent, borderColor: theme.accent },
+  chipText: { color: theme.textMuted, fontSize: 12, fontWeight: '700' },
+  chipTextActive: { color: theme.onAccent },
+  joinBtn: { backgroundColor: theme.accent, borderRadius: chipRadius, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  joinBtnText: { color: theme.onAccent, fontWeight: '900', fontSize: 14 },
+  outlineBtn: { borderWidth: 1, borderColor: theme.danger, borderRadius: chipRadius, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
+  outlineBtnText: { color: theme.danger, fontWeight: '800', fontSize: 13 },
   matchRow: {
     flexDirection: 'row',
     alignItems: 'center',

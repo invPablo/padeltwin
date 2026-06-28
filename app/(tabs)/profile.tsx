@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -206,61 +205,34 @@ export default function ProfileScreen() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-      {/* CURVED PHOTO COVER */}
+      {/* CIRCULAR PROFILE PHOTO */}
       <View style={styles.headerWrapper}>
-        <View style={styles.bannerContainer}>
+        <Pressable
+          style={({ pressed }) => [styles.logoutCorner, pressed && { opacity: 0.7 }]}
+          onPress={() => supabase.auth.signOut()}
+        >
+          <Ionicons name="log-out-outline" size={20} color={theme.danger} />
+        </Pressable>
+
+        <View style={styles.avatarCircleWrap}>
           {profile.avatar_url ? (
-            <ImageBackground
-              source={{ uri: profile.avatar_url }}
-              style={styles.bannerImage}
-              imageStyle={{ borderBottomLeftRadius: 40, borderBottomRightRadius: 40 }}
-            >
-              <View style={styles.bannerOverlay} />
-            </ImageBackground>
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarCircle} />
           ) : (
-            <View style={styles.bannerPlaceholder}>
-              <Text style={styles.bannerPlaceholderText}>{initials}</Text>
-              <View style={styles.bannerOverlay} />
+            <View style={styles.avatarCirclePlaceholder}>
+              <Text style={styles.avatarCirclePlaceholderText}>{initials}</Text>
             </View>
           )}
-        </View>
 
-        {/* THREE FLOATING BUTTONS: change photo / save / log out */}
-        <View style={styles.actionRowFloating}>
           <Pressable
-            style={({ pressed }) => [styles.smallActionBtn, pressed && { transform: [{ scale: 0.95 }] }]}
+            style={({ pressed }) => [styles.cameraBadge, pressed && { transform: [{ scale: 0.95 }] }]}
             onPress={handlePickAvatar}
             disabled={uploadingAvatar}
           >
             {uploadingAvatar ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Ionicons name="camera" size={20} color="#FFF" />
-            )}
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.largeActionBtn,
-              { backgroundColor: theme.accent },
-              updateProfile.isPending && { opacity: 0.9 },
-              pressed && { transform: [{ scale: 0.95 }] },
-            ]}
-            onPress={handleSave}
-            disabled={updateProfile.isPending}
-          >
-            {updateProfile.isPending ? (
               <ActivityIndicator size="small" color={theme.onAccent} />
             ) : (
-              <Ionicons name="checkmark" size={26} color={theme.onAccent} />
+              <Ionicons name="camera" size={16} color={theme.onAccent} />
             )}
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.smallActionBtn, pressed && { transform: [{ scale: 0.95 }] }]}
-            onPress={() => supabase.auth.signOut()}
-          >
-            <Ionicons name="log-out-outline" size={20} color={theme.danger} />
           </Pressable>
         </View>
       </View>
@@ -283,14 +255,14 @@ export default function ProfileScreen() {
         {/* SOCIAL */}
         <View style={styles.socialStatsRow}>
           <Pressable
-            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.socialStatPill, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/social/${userId}?type=followers` as any)}
           >
             <Text style={styles.socialStatValue}>{followerCount ?? 0}</Text>
             <Text style={styles.socialStatLabel}>Followers</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.socialStatPill, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/social/${userId}?type=following` as any)}
           >
             <Text style={styles.socialStatValue}>{followingCount ?? 0}</Text>
@@ -797,62 +769,67 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   centerContainer: { flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' },
-  headerWrapper: { position: 'relative', width: '100%', zIndex: 10, backgroundColor: theme.background },
-  bannerContainer: { height: 280, width: '100%', backgroundColor: '#1C1C1E', borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
-  bannerImage: { width: '100%', height: '100%', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, overflow: 'hidden' },
-  bannerPlaceholder: {
+  headerWrapper: {
+    position: 'relative',
     width: '100%',
-    height: '100%',
+    zIndex: 10,
+    backgroundColor: theme.background,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E1E24',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    paddingTop: 24,
+    paddingBottom: 8,
   },
-  bannerPlaceholderText: { fontSize: 72, fontWeight: '900', color: 'rgba(255, 255, 255, 0.15)', letterSpacing: 2 },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  actionRowFloating: {
+  logoutCorner: {
     position: 'absolute',
-    bottom: -28,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    top: 24,
+    right: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'center',
     zIndex: 30,
   },
-  smallActionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#111111',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 5,
+  avatarCircleWrap: { width: 132, height: 132 },
+  avatarCircle: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 3,
+    borderColor: theme.accent,
   },
-  largeActionBtn: {
-    width: 68,
-    height: 68,
-    borderRadius: 24,
+  avatarCirclePlaceholder: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 3,
+    borderColor: theme.accent,
+    backgroundColor: theme.card,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarCirclePlaceholderText: { fontSize: 40, fontWeight: '900', color: theme.textMuted, letterSpacing: 1 },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: theme.background,
     shadowColor: theme.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
   },
-  contentBody: { backgroundColor: theme.background, paddingTop: 48, paddingHorizontal: 24, paddingBottom: 40, gap: 16 },
+  contentBody: { backgroundColor: theme.background, paddingTop: 16, paddingHorizontal: 24, paddingBottom: 40, gap: 16 },
   badgeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 },
   outlinedBadge: {
     borderWidth: 1.5,
@@ -863,8 +840,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   outlinedBadgeText: { color: theme.text, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  playerName: { fontSize: 26, fontWeight: '800', color: theme.text, letterSpacing: -0.5, textAlign: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4, gap: 8 },
+  playerName: { fontFamily: 'Anton_400Regular', fontSize: 26, color: theme.accent, letterSpacing: -0.5, textAlign: 'center' },
   locationSub: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, textAlign: 'center', marginBottom: 8 },
   statsCardContainer: {
     flexDirection: 'row',
@@ -878,13 +855,23 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   statColumn: { flex: 1, alignItems: 'center' },
-  statHugeText: { fontSize: 22, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
+  statHugeText: { fontFamily: 'Anton_400Regular', fontSize: 22, color: theme.accent, letterSpacing: -0.5 },
   statSubLabel: { fontSize: 11, fontWeight: '500', color: theme.textMuted, marginTop: 4 },
   statDivider: { width: 1.5, height: 32, backgroundColor: theme.border },
-  socialStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 10 },
-  socialStatColumn: { alignItems: 'center' },
-  socialStatValue: { fontSize: 15, fontWeight: '800', color: theme.text },
-  socialStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  socialStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 10 },
+  socialStatPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  socialStatValue: { fontFamily: 'Anton_400Regular', fontSize: 15, color: theme.accent },
+  socialStatLabel: { fontSize: 11, color: theme.textMuted },
   recordsCardContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

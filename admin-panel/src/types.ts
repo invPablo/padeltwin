@@ -45,7 +45,7 @@ export interface AdminMessage {
 }
 
 export type TournamentFormat = 'round_robin' | 'bracket';
-export type TournamentStatusValue = 'draft' | 'active' | 'completed';
+export type TournamentStatusValue = 'draft' | 'open' | 'active' | 'completed';
 
 export interface Tournament {
   id: string;

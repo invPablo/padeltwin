@@ -62,7 +62,7 @@ export default function ClubLeaderboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   content: { padding: 20, gap: 4 },
-  title: { color: theme.text, fontSize: 24, fontWeight: '900', letterSpacing: 0.5 },
+  title: { fontFamily: 'Anton_400Regular', color: theme.text, fontSize: 24, letterSpacing: 0.5 },
   subtitle: { color: theme.accent, fontWeight: '800', fontSize: 13, marginBottom: 16 },
   emptyText: { color: theme.textMuted, fontSize: 13, lineHeight: 20, marginTop: 12 },
   leaderboardContainer: { backgroundColor: theme.card, borderRadius: cardRadius, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },

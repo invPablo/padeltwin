@@ -220,7 +220,7 @@ export interface LeagueMemberWithProfile extends LeagueMember {
 }
 
 export type TournamentFormat = "round_robin" | "bracket";
-export type TournamentStatus = "draft" | "active" | "completed";
+export type TournamentStatus = "draft" | "open" | "active" | "completed";
 
 export interface Tournament {
   id: string;

@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   container: { padding: 20, gap: 16, paddingBottom: 32 },
   headerContainer: { marginBottom: 4, marginTop: 12 },
   welcomeTag: { fontSize: 10, fontWeight: '900', color: theme.primary, letterSpacing: 2, marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
+  title: { fontFamily: 'Coubra', fontSize: 28, fontWeight: '900', color: theme.text, letterSpacing: -0.5 },
   eloPerformanceCard: {
     backgroundColor: theme.card,
     borderRadius: cardRadius,
