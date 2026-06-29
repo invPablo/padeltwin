@@ -76,7 +76,7 @@ export default function HomeScreen() {
   const [scrimInfoOpen, setScrimInfoOpen] = useState(false);
   const scrollX = useRef(new Animated.Value(0)).current;
   const { data: stats, isLoading: statsLoading } = useMyStats(userId);
-  const { data: realRecentResults, isLoading: resultsLoading } = useRecentResults(userId, 10);
+  const { data: realRecentResults, isLoading: resultsLoading } = useRecentResults(userId, 100);
   const { data: leaderboard, isLoading: leaderboardLoading } = useLeaderboard(profile?.zone);
   const { data: upcomingMatches, isLoading: upcomingLoading } = useMyUpcomingMatches(userId);
   const { data: partnerRequests } = usePartnerRequests(userId);
@@ -276,28 +276,48 @@ export default function HomeScreen() {
     }
   }
 
-  // Activity heatmap (20 weeks x 7 days) built from real match dates
-  const heatmapCols = 20;
-  const heatmapRows = 7;
-  const contributionGrid = Array.from({ length: heatmapRows }, (_, rIdx) =>
-    Array.from({ length: heatmapCols }, (_, cIdx) => ({ id: `${rIdx}-${cIdx}`, active: false, intensity: 1 }))
-  );
-
+  // Weekly activity bars (last 8 weeks, oldest → newest)
+  const weeklyBars = Array.from({ length: 8 }, () => ({ wins: 0, losses: 0 }));
   if (userId && displayResults) {
     const now = Date.now();
     const weekMs = 7 * 24 * 60 * 60 * 1000;
     for (const r of displayResults) {
-      const date = new Date(r.created_at);
-      const weeksAgo = Math.floor((now - date.getTime()) / weekMs);
-      const colIdx = heatmapCols - 1 - weeksAgo;
-      const rowIdx = date.getDay();
-      if (colIdx >= 0 && colIdx < heatmapCols) {
-        const cell = contributionGrid[rowIdx][colIdx];
-        cell.active = true;
-        if (didWin(r, userId)) cell.intensity = 2;
+      const weeksAgo = Math.floor((now - new Date(r.created_at).getTime()) / weekMs);
+      if (weeksAgo < 8) {
+        const idx = 7 - weeksAgo;
+        if (didWin(r, userId)) weeklyBars[idx].wins++;
+        else weeklyBars[idx].losses++;
       }
     }
   }
+  const maxWeekTotal = Math.max(...weeklyBars.map(w => w.wins + w.losses), 1);
+
+  // This month vs last month
+  const nowDate = new Date();
+  let thisMonthMatches = 0, thisMonthWins = 0, lastMonthMatches = 0;
+  if (userId && displayResults) {
+    const m = nowDate.getMonth(), y = nowDate.getFullYear();
+    const lm = m === 0 ? 11 : m - 1;
+    const ly = m === 0 ? y - 1 : y;
+    for (const r of displayResults) {
+      const d = new Date(r.created_at);
+      if (d.getMonth() === m && d.getFullYear() === y) {
+        thisMonthMatches++;
+        if (didWin(r, userId)) thisMonthWins++;
+      } else if (d.getMonth() === lm && d.getFullYear() === ly) {
+        lastMonthMatches++;
+      }
+    }
+  }
+  const monthDelta = thisMonthMatches - lastMonthMatches;
+
+  // Most active day of week
+  const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+  if (userId && displayResults) {
+    for (const r of displayResults) dayCounts[new Date(r.created_at).getDay()]++;
+  }
+  const mostActiveDay = dayCounts.every(c => c === 0) ? '—' : DAY_NAMES[dayCounts.indexOf(Math.max(...dayCounts))];
 
   return (
     <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
@@ -411,51 +431,15 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.divider} />
-              
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.heroLabel}>SCRIM INDEX (CURRENT FORM)</Text>
-                    <Pressable onPress={() => setScrimInfoOpen((v) => !v)}>
-                      <Ionicons name="information-circle-outline" size={12} color={theme.textMuted} />
-                    </Pressable>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
-                    <Text style={[styles.eloScore, { fontSize: 32 }]}>{actualScrim == null ? '—' : actualScrim.toFixed(1)}</Text>
-                    {/* Form Squares */}
-                    {userId && displayResults && (
-                      <View style={{ flexDirection: 'row', gap: 4, marginBottom: 8 }}>
-                        {displayResults.slice(0, 5).reverse().map((m: any, i: number) => {
-                          const w = didWin(m, userId);
-                          return (
-                            <View 
-                              key={m.id || i} 
-                              style={{ 
-                                width: 12, 
-                                height: 12, 
-                                borderRadius: 2, 
-                                backgroundColor: w ? theme.primary : '#22242E'
-                              }} 
-                            />
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
+              <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.rankBadge}>
+                  <Ionicons name="trophy-outline" size={12} color={theme.accent} />
+                  <Text style={styles.rankBadgeText}>{rankLabel}</Text>
                 </View>
-                <View style={[styles.gridBadge, { backgroundColor: 'rgba(198, 255, 51, 0.12)' }]}>
-                  <Text style={[styles.gridBadgeText, { color: theme.accent, fontSize: 10 }]}>
-                    {actualScrim == null ? 'NO FORM YET' : scrimIndexLabel(actualScrim)}
-                  </Text>
-                </View>
-              </View>
-
-              {scrimInfoOpen && (
-                <Text style={[styles.scrimInfoText, { marginTop: 12 }]}>
-                  Your Scrim Index is your form RIGHT NOW (1.0–10.0). It's based on your last 5 confirmed matches.
+                <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>
+                  {stats?.played ?? 0} PARTIDAS
                 </Text>
-              )}
+              </View>
             </Card>
           </Animated.View>
 
@@ -476,59 +460,70 @@ export default function HomeScreen() {
               })
             }]
           }}>
-            <Card style={[styles.heroCard, { backgroundColor: '#111113', flex: 1 }]}>
-              {/* Stat Blocks Grid */}
-              <View style={styles.claudeStatsGrid}>
-                {/* Row 1 */}
-                <View style={{ flexDirection: 'row', gap: 6, width: '100%' }}>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Matches</Text>
-                    <Text style={styles.claudeStatValue}>{stats?.played ?? 0}</Text>
+            <Card style={[styles.heroCard, { flex: 1 }]}>
+              {/* Month summary */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View>
+                  <Text style={styles.heroLabel}>ESTE MES</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <Text style={[styles.eloScore, { fontSize: 30 }]}>{thisMonthMatches}</Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600' }}>partidas</Text>
                   </View>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Win Rate</Text>
-                    <Text style={styles.claudeStatValue}>{stats?.winRate ?? 0}%</Text>
-                  </View>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Court Time</Text>
-                    <Text style={styles.claudeStatValue}>{Math.round((stats?.played ?? 0) * 1.5)}h</Text>
-                  </View>
+                  <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.5 }}>
+                    {thisMonthWins}W · {thisMonthMatches - thisMonthWins}L{thisMonthMatches > 0 ? ` · ${Math.round((thisMonthWins / thisMonthMatches) * 100)}%` : ''}
+                  </Text>
                 </View>
-
-                {/* Row 2 */}
-                <View style={{ flexDirection: 'row', gap: 6, width: '100%' }}>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Cur Streak</Text>
-                    <Text style={styles.claudeStatValue}>{streak > 0 ? `${streak}${streakType ?? 'W'}` : '0'}</Text>
-                  </View>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Peak PS</Text>
-                    <Text style={styles.claudeStatValue}>{maxElo}</Text>
-                  </View>
-                  <View style={[styles.claudeStatBox, { flex: 1 }]}>
-                    <Text style={styles.claudeStatLabel}>Best Streak</Text>
-                    <Text style={styles.claudeStatValue}>{bestWinStreak}W</Text>
-                  </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.heroLabel}>VS MES ANT.</Text>
+                  <Text style={{ fontSize: 26, fontFamily: 'Anton_400Regular', color: monthDelta >= 0 ? theme.accent : '#FF3B30', marginTop: 4 }}>
+                    {monthDelta > 0 ? '+' : ''}{monthDelta}
+                  </Text>
                 </View>
               </View>
 
-              <View style={[styles.divider, { marginVertical: 12, backgroundColor: '#222' }]} />
+              {/* Weekly activity bars */}
+              <View style={styles.weeklyBarsContainer}>
+                {weeklyBars.map((week, i) => {
+                  const total = week.wins + week.losses;
+                  const barH = total > 0 ? Math.max(6, Math.round((total / maxWeekTotal) * 54)) : 0;
+                  const winH = total > 0 ? Math.round((week.wins / total) * barH) : 0;
+                  const lossH = barH - winH;
+                  return (
+                    <View key={i} style={styles.weeklyBarCol}>
+                      <View style={{ height: 54, justifyContent: 'flex-end' }}>
+                        {total > 0 ? (
+                          <View style={{ height: barH, borderRadius: 3, overflow: 'hidden' }}>
+                            <View style={{ height: winH, backgroundColor: theme.accent }} />
+                            <View style={{ height: lossH, backgroundColor: '#2A2A2E' }} />
+                          </View>
+                        ) : (
+                          <View style={{ height: 2, borderRadius: 1, backgroundColor: '#1C1C1F' }} />
+                        )}
+                      </View>
+                      <Text style={[styles.weeklyBarLabel, i === 7 ? { color: theme.accent } : {}]}>
+                        {i === 7 ? 'HOY' : i === 0 ? '-7S' : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
 
-              {/* GitHub/Claude Style Heatmap */}
-              <View style={styles.claudeHeatmapContainer}>
-                {contributionGrid.map((row, rIdx) => (
-                  <View key={rIdx} style={styles.claudeHeatmapRow}>
-                    {row.map((cell) => (
-                      <View 
-                        key={cell.id} 
-                        style={[
-                          styles.claudeHeatmapCell,
-                          cell.active && (cell.intensity === 2 ? styles.claudeHeatmapCellActiveHigh : styles.claudeHeatmapCellActive)
-                        ]} 
-                      />
-                    ))}
-                  </View>
-                ))}
+              <View style={[styles.divider, { marginVertical: 10, backgroundColor: '#222' }]} />
+
+              {/* Personal records */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={styles.prItem}>
+                  <Text style={styles.prLabel}>PEAK PS</Text>
+                  <Text style={styles.prValue}>{maxElo}</Text>
+                </View>
+                <View style={[styles.prItem, { alignItems: 'center' }]}>
+                  <Text style={styles.prLabel}>MEJOR RACHA</Text>
+                  <Text style={styles.prValue}>{bestWinStreak > 0 ? `${bestWinStreak}W` : '—'}</Text>
+                </View>
+                <View style={[styles.prItem, { alignItems: 'flex-end' }]}>
+                  <Text style={styles.prLabel}>DÍA ACTIVO</Text>
+                  <Text style={styles.prValue}>{mostActiveDay}</Text>
+                </View>
               </View>
             </Card>
           </Animated.View>
@@ -572,6 +567,40 @@ export default function HomeScreen() {
           />
         </View>
       </View>
+
+      {/* Scrim Index */}
+      <Card style={{ borderLeftWidth: 3, borderLeftColor: theme.accent }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.heroLabel}>SCRIM INDEX (CURRENT FORM)</Text>
+              <Pressable onPress={() => setScrimInfoOpen((v) => !v)}>
+                <Ionicons name="information-circle-outline" size={12} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 4 }}>
+              <Text style={[styles.eloScore, { fontSize: 32 }]}>{actualScrim == null ? '—' : actualScrim.toFixed(1)}</Text>
+              {userId && displayResults && (
+                <View style={{ flexDirection: 'row', gap: 4, marginBottom: 8 }}>
+                  {displayResults.slice(0, 5).reverse().map((m: any, i: number) => (
+                    <View key={m.id || i} style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: didWin(m, userId) ? theme.primary : '#22242E' }} />
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+          <View style={[styles.gridBadge, { backgroundColor: 'rgba(198, 255, 51, 0.12)', marginTop: 0 }]}>
+            <Text style={[styles.gridBadgeText, { color: theme.accent, fontSize: 10 }]}>
+              {actualScrim == null ? 'NO FORM YET' : scrimIndexLabel(actualScrim)}
+            </Text>
+          </View>
+        </View>
+        {scrimInfoOpen && (
+          <Text style={[styles.scrimInfoText, { marginTop: 10 }]}>
+            Tu Scrim Index es tu forma AHORA MISMO (1.0–10.0). Se basa en tus últimas 5 partidas confirmadas.
+          </Text>
+        )}
+      </Card>
 
       <View style={styles.leaguesSectionHeader}>
         <Text style={[styles.sectionTitle, { marginBottom: 0, fontSize: 18 }]}>LEAGUES</Text>
@@ -874,11 +903,12 @@ const styles = StyleSheet.create({
   claudeStatLabel: { fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: '600', marginBottom: 4 },
   claudeStatValue: { fontSize: 16, color: '#FFF', fontWeight: '800', fontFamily: 'Anton_400Regular' },
   
-  claudeHeatmapContainer: { paddingHorizontal: 4, paddingBottom: 6, gap: 3 },
-  claudeHeatmapRow: { flexDirection: 'row', gap: 3 },
-  claudeHeatmapCell: { width: 10, height: 10, backgroundColor: '#1C1C1F', borderRadius: 2, borderWidth: 1, borderColor: '#2A2A2E' },
-  claudeHeatmapCellActive: { backgroundColor: '#006d32', borderColor: '#006d32' },
-  claudeHeatmapCellActiveHigh: { backgroundColor: '#39d353', borderColor: '#39d353', shadowColor: '#39d353', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 2, elevation: 2 },
+  weeklyBarsContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginTop: 14, paddingHorizontal: 2 },
+  weeklyBarCol: { flex: 1, alignItems: 'center', gap: 4 },
+  weeklyBarLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '700', letterSpacing: 0.3 },
+  prItem: { gap: 3 },
+  prLabel: { fontSize: 9, color: theme.textMuted, fontWeight: '700', letterSpacing: 0.8 },
+  prValue: { fontSize: 18, fontFamily: 'Anton_400Regular', color: theme.text, letterSpacing: -0.5 },
 
   gridCard: { flex: 1 },
   gridCardContent: { padding: 16, alignItems: 'flex-start' },
