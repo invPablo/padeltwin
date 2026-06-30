@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/useSession';
-import { useProfile } from '@/lib/queries';
+import { useProfile, useUnreadNotificationCount } from '@/lib/queries';
 import { theme } from '@/constants/theme';
 
 export function TopNavigation({ routeName }: { routeName: string }) {
@@ -12,6 +12,7 @@ export function TopNavigation({ routeName }: { routeName: string }) {
   const insets = useSafeAreaInsets();
   const { session } = useSession();
   const { data: profile } = useProfile(session?.user.id);
+  const { data: unreadCount } = useUnreadNotificationCount(session?.user.id);
 
   // Map route names to display titles
   const getTitle = () => {
@@ -53,6 +54,7 @@ export function TopNavigation({ routeName }: { routeName: string }) {
 
           <Pressable onPress={() => router.push('/notifications' as any)} style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#FFF" />
+            {!!unreadCount && <View style={styles.badgeDot} />}
           </Pressable>
         </View>
       </View>
@@ -88,6 +90,17 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 4,
+  },
+  badgeDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.primary,
+    borderWidth: 1.5,
+    borderColor: theme.nav,
   },
   avatarButton: {
     width: 32,

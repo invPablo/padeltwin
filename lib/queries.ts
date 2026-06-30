@@ -947,6 +947,88 @@ export function useItemVibs(itemType: VibItemType, itemId: string | undefined, u
 }
 
 // Cheap counts for profile/player screens — no schema needed, just a head-only count.
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  read: boolean;
+  created_at: string;
+}
+
+export function useNotifications(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["notifications", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("recipient_id", userId!)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as AppNotification[];
+    },
+    enabled: !!userId,
+  });
+}
+
+export function useUnreadNotificationCount(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["unreadNotificationCount", userId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("recipient_id", userId!)
+        .eq("read", false);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!userId,
+    refetchInterval: 30000,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, ids }: { userId: string; ids?: string[] }) => {
+      let query = supabase.from("notifications").update({ read: true }).eq("recipient_id", userId);
+      if (ids && ids.length > 0) query = query.in("id", ids);
+      const { error } = await query;
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["notifications", vars.userId] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotificationCount", vars.userId] });
+    },
+  });
+}
+
+export function useLastMessages(requestIds: string[]) {
+  return useQuery({
+    queryKey: ["lastMessages", requestIds.slice().sort()],
+    queryFn: async () => {
+      if (requestIds.length === 0) return {} as Record<string, { body: string; created_at: string }>;
+      const { data, error } = await supabase
+        .from("messages")
+        .select("request_id, body, created_at")
+        .in("request_id", requestIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const byRequest: Record<string, { body: string; created_at: string }> = {};
+      for (const m of data ?? []) {
+        if (!byRequest[m.request_id]) byRequest[m.request_id] = { body: m.body, created_at: m.created_at };
+      }
+      return byRequest;
+    },
+    enabled: requestIds.length > 0,
+  });
+}
+
 export function useFollowerCount(profileId: string | undefined) {
   return useQuery({
     queryKey: ["followerCount", profileId],
