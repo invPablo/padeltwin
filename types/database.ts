@@ -12,6 +12,7 @@ export interface Profile {
   zone: string | null;
   country: string | null;
   avatar_url: string | null;
+  bio: string | null;
   elo: number;
   height_cm: number | null;
   sex: Sex | null;

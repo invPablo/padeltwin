@@ -25,6 +25,7 @@ import { CoachBadge } from '@/components/CoachBadge';
 import { MatchCard } from '@/components/MatchCard';
 import { PhotoViewerModal } from '@/components/PhotoViewerModal';
 import type { PostCardData } from '@/lib/queries';
+import { divisionProgress } from '@/lib/pairDivisions';
 
 function didWin(result: MatchResultWithProfiles, userId: string) {
   const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
@@ -94,6 +95,15 @@ export default function ProfileScreen() {
     }
   }
 
+  const rank = profile ? divisionProgress(profile.elo) : null;
+
+  // "Best" post pinned to the top: most recent win if you have one, else just
+  // the most recent post — no separate "likes" data is fetched for the grid.
+  const bestPost = myPosts && myPosts.length > 0
+    ? myPosts.find((p) => p.matchResult && didWin(p.matchResult, userId!)) ?? myPosts[0]
+    : null;
+  const restPosts = bestPost ? myPosts!.filter((p) => p.id !== bestPost.id) : myPosts ?? [];
+
   const recordItems: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string }[] = [];
   if (records?.longestWinStreak) {
     recordItems.push({ icon: 'flame', value: `${records.longestWinStreak} wins`, label: 'Longest streak' });
@@ -142,11 +152,25 @@ export default function ProfileScreen() {
           {profile.coach_status === 'approved' && <CoachBadge />}
         </View>
         {profile.zone ? <Text style={styles.locationSub}>📍 {profile.zone}</Text> : null}
-        {profile.looking_for_partner && (
-          <View style={styles.outlinedBadge}>
-            <Text style={styles.outlinedBadgeText}>LOOKING FOR PARTNER</Text>
-          </View>
-        )}
+        {profile.bio ? <Text style={styles.bioText}>{profile.bio}</Text> : null}
+
+        <View style={styles.badgeChipsRow}>
+          {rank && (
+            <View style={styles.rankChip}>
+              <Ionicons name="ribbon-outline" size={12} color={theme.accent} />
+              <Text style={styles.rankChipText}>{rank.division}</Text>
+            </View>
+          )}
+          {profile.looking_for_partner && (
+            <View style={styles.outlinedBadge}>
+              <Text style={styles.outlinedBadgeText}>LOOKING FOR PARTNER</Text>
+            </View>
+          )}
+        </View>
+
+        <Pressable style={styles.editProfileBtn} onPress={() => router.push('/settings' as any)}>
+          <Text style={styles.editProfileBtnText}>EDIT PROFILE</Text>
+        </Pressable>
 
         {/* Stat row */}
         <View style={styles.statsRow}>
@@ -218,32 +242,49 @@ export default function ProfileScreen() {
         postsLoading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 30 }} />
         ) : myPosts && myPosts.length > 0 ? (
-          <View style={styles.masonryRow}>
-            <View style={styles.masonryCol}>
-              {myPosts.filter((_, i) => i % 2 === 0).map((p, i) => (
+          <>
+            {bestPost && (
+              <View style={styles.pinnedWrap}>
+                <View style={styles.pinnedLabel}>
+                  <Ionicons name="star" size={11} color={theme.accent} />
+                  <Text style={styles.pinnedLabelText}>PINNED</Text>
+                </View>
                 <MatchCard
-                  key={p.id}
-                  post={p}
+                  post={bestPost}
                   posterId={userId}
-                  width={COL_WIDTH}
-                  height={cardHeightFor(p.id, i)}
-                  onPress={() => handlePostPress(p)}
+                  width={SCREEN_WIDTH - MASONRY_PADDING * 2}
+                  height={260}
+                  onPress={() => handlePostPress(bestPost)}
                 />
-              ))}
+              </View>
+            )}
+            <View style={styles.masonryRow}>
+              <View style={styles.masonryCol}>
+                {restPosts.filter((_, i) => i % 2 === 0).map((p, i) => (
+                  <MatchCard
+                    key={p.id}
+                    post={p}
+                    posterId={userId}
+                    width={COL_WIDTH}
+                    height={cardHeightFor(p.id, i)}
+                    onPress={() => handlePostPress(p)}
+                  />
+                ))}
+              </View>
+              <View style={styles.masonryCol}>
+                {restPosts.filter((_, i) => i % 2 === 1).map((p, i) => (
+                  <MatchCard
+                    key={p.id}
+                    post={p}
+                    posterId={userId}
+                    width={COL_WIDTH}
+                    height={cardHeightFor(p.id, i + 1)}
+                    onPress={() => handlePostPress(p)}
+                  />
+                ))}
+              </View>
             </View>
-            <View style={styles.masonryCol}>
-              {myPosts.filter((_, i) => i % 2 === 1).map((p, i) => (
-                <MatchCard
-                  key={p.id}
-                  post={p}
-                  posterId={userId}
-                  width={COL_WIDTH}
-                  height={cardHeightFor(p.id, i + 1)}
-                  onPress={() => handlePostPress(p)}
-                />
-              ))}
-            </View>
-          </View>
+          </>
         ) : (
           <View style={styles.emptyTab}>
             <Ionicons name="camera-outline" size={32} color={theme.textMuted} />
@@ -327,8 +368,23 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
   playerName: { fontFamily: 'Anton_400Regular', fontSize: 20, color: theme.text, letterSpacing: -0.3 },
   locationSub: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 6 },
-  outlinedBadge: { borderWidth: 1, borderColor: theme.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 14 },
+  bioText: { color: theme.text, fontSize: 12, textAlign: 'center', marginBottom: 8, lineHeight: 17, paddingHorizontal: 16 },
+  badgeChipsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  rankChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: 'rgba(198, 255, 51, 0.3)',
+    backgroundColor: 'rgba(198, 255, 51, 0.08)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4,
+  },
+  rankChipText: { color: theme.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  outlinedBadge: { borderWidth: 1, borderColor: theme.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   outlinedBadgeText: { color: theme.text, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  editProfileBtn: {
+    borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 24,
+    marginBottom: 14,
+  },
+  editProfileBtnText: { color: theme.text, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  pinnedWrap: { paddingHorizontal: MASONRY_PADDING, marginBottom: MASONRY_GAP },
+  pinnedLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  pinnedLabelText: { color: theme.accent, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
   statsRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-around', marginBottom: 10 },
   statColumn: { alignItems: 'center' },
   statValue: { fontFamily: 'Anton_400Regular', fontSize: 18, color: theme.text },

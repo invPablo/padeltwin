@@ -72,6 +72,7 @@ export default function SettingsScreen() {
   }
 
   const [fullName, setFullName] = useState('');
+  const [bio, setBio] = useState('');
   const [zone, setZone] = useState('');
   const [country, setCountry] = useState('');
   const [level, setLevel] = useState<PlayerLevel | null>(null);
@@ -81,6 +82,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name ?? '');
+      setBio(profile.bio ?? '');
       setZone(profile.zone ?? '');
       setCountry(profile.country ?? '');
       setLevel(profile.level);
@@ -101,6 +103,7 @@ export default function SettingsScreen() {
     updateProfile.mutate({
       id: userId!,
       full_name: fullName,
+      bio: bio.trim() || null,
       zone,
       country: country || null,
       level,
@@ -148,6 +151,19 @@ export default function SettingsScreen() {
             placeholder="Your name"
             placeholderTextColor={theme.textMuted}
             onFocus={() => setFocusedInput('name')}
+            onBlur={() => setFocusedInput(null)}
+          />
+
+          <Text style={[styles.label, { marginTop: 14 }]}>BIO</Text>
+          <TextInput
+            style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }, focusedInput === 'bio' && styles.inputFocused]}
+            value={bio}
+            onChangeText={setBio}
+            placeholder="A short line about you and your game"
+            placeholderTextColor={theme.textMuted}
+            multiline
+            maxLength={120}
+            onFocus={() => setFocusedInput('bio')}
             onBlur={() => setFocusedInput(null)}
           />
 
