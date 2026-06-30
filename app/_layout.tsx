@@ -6,7 +6,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { theme } from '@/constants/theme';
@@ -49,22 +48,12 @@ export default function RootLayout() {
     (async () => {
       try {
         const result = await Updates.checkForUpdateAsync();
-        Alert.alert(
-          '[OTA debug]',
-          `channel: ${Updates.channel}\n` +
-            `runtimeVersion: ${Updates.runtimeVersion}\n` +
-            `updateId: ${Updates.updateId}\n` +
-            `isEmbeddedLaunch: ${Updates.isEmbeddedLaunch}\n` +
-            `isAvailable: ${result.isAvailable}\n` +
-            `reason: ${result.reason ?? 'n/a'}\n` +
-            `manifest.id: ${'manifest' in result && result.manifest ? (result.manifest as any).id : 'n/a'}`
-        );
         if (result.isAvailable) {
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
         }
-      } catch (e: any) {
-        Alert.alert('[OTA debug] check failed', String(e?.message ?? e));
+      } catch (e) {
+        console.log('[OTA] update check failed', e);
       }
     })();
   }, []);
