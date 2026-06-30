@@ -2,12 +2,25 @@ import { useState, useRef, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View, Animated, Easing, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useMatches, useJoinMatch, MatchDateRange } from '@/lib/queries';
+import { useMatches, useJoinMatch, useRecentResults, MatchDateRange } from '@/lib/queries';
 import { useSession } from '@/lib/useSession';
-import type { MatchWithPlayers, PlayerLevel } from '@/types/database';
+import type { MatchWithPlayers, MatchResultWithProfiles, PlayerLevel } from '@/types/database';
 import { theme, cardRadius, chipRadius } from '@/constants/theme';
 import { LEVELS, LEVEL_LABELS } from '@/constants/levels';
 import { Card } from '@/components/Card';
+
+function didWinResult(result: MatchResultWithProfiles, userId: string) {
+  const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
+  return (inTeamA && result.winner === 'a') || (!inTeamA && result.winner === 'b');
+}
+
+function opponentsOf(result: MatchResultWithProfiles, userId: string) {
+  const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
+  const rivals = inTeamA
+    ? [result.team_b_player1_profile, result.team_b_player2_profile]
+    : [result.team_a_player1_profile, result.team_a_player2_profile];
+  return rivals.map((p) => p?.full_name ?? 'Player').join(' / ');
+}
 
 const DATE_RANGE_OPTIONS: { value: MatchDateRange; label: string }[] = [
   { value: 'today', label: 'TODAY' },
@@ -26,10 +39,11 @@ export default function MatchSearchScreen() {
   const { data: matches, isLoading, refetch, isRefetching } = useMatches({ zone, level, dateRange });
   const joinMatch = useJoinMatch();
   const [joinError, setJoinError] = useState<string | null>(null);
+  const { data: recentResults, isLoading: recentLoading } = useRecentResults(userId, 20);
 
   // Matchmaking State Machine
   // 'idle' | 'queue' | 'found' | 'accepted'
-  const [activeTab, setActiveTab] = useState<'feed' | 'radar'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'radar' | 'recent'>('feed');
   const [queueState, setQueueState] = useState<'idle' | 'queue' | 'found' | 'accepted'>('idle');
   const [queueTime, setQueueTime] = useState(0);
   const [countdownTime, setCountdownTime] = useState(10);
@@ -331,12 +345,22 @@ export default function MatchSearchScreen() {
           <Ionicons name="list" size={14} color={activeTab === 'feed' ? '#FFF' : theme.textMuted} />
           <Text style={[styles.tabButtonText, activeTab === 'feed' && styles.tabButtonTextActive]}>LIST VIEW</Text>
         </Pressable>
-        <Pressable 
+        <Pressable
           style={[styles.tabButton, activeTab === 'radar' && styles.tabButtonActive]}
           onPress={() => setActiveTab('radar')}
         >
           <Ionicons name="radio" size={14} color={activeTab === 'radar' ? '#FFF' : theme.textMuted} />
           <Text style={[styles.tabButtonText, activeTab === 'radar' && styles.tabButtonTextActive]}>RADAR JOIN</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tabButton, activeTab === 'recent' && styles.tabButtonActive]}
+          onPress={() => {
+            cancelQueue();
+            setActiveTab('recent');
+          }}
+        >
+          <Ionicons name="time" size={14} color={activeTab === 'recent' ? '#FFF' : theme.textMuted} />
+          <Text style={[styles.tabButtonText, activeTab === 'recent' && styles.tabButtonTextActive]}>RECENT</Text>
         </Pressable>
       </View>
 
@@ -473,7 +497,7 @@ export default function MatchSearchScreen() {
             />
           )}
         </>
-      ) : (
+      ) : activeTab === 'radar' ? (
         /* Radar Matchmaking View */
         <View style={styles.radarContainer}>
           {queueState === 'idle' && (
@@ -637,6 +661,55 @@ export default function MatchSearchScreen() {
               </View>
             </View>
           </Modal>
+        </View>
+      ) : (
+        /* Recent Matches View */
+        <View style={{ flex: 1 }}>
+          {recentLoading ? (
+            <ActivityIndicator style={{ marginTop: 32 }} color={theme.primary} size="large" />
+          ) : (
+            <FlatList
+              data={recentResults ?? []}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item: r }) => {
+                const win = didWinResult(r, userId!);
+                const dateLabel = new Date(r.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase();
+                return (
+                  <Pressable onPress={() => router.push(`/match/${r.match_id || r.id}` as any)} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
+                    <Card style={[styles.recentCard, { borderLeftWidth: 3, borderLeftColor: win ? theme.success : theme.border }]} contentStyle={{ padding: 16 }}>
+                      <View style={styles.recentRow}>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <Text style={styles.recentVs}>VS</Text>
+                          <Text style={styles.recentOpponent} numberOfLines={1}>{opponentsOf(r, userId!).toUpperCase()}</Text>
+                        </View>
+                        <View style={[styles.recentBadge, win ? styles.recentBadgeWin : styles.recentBadgeLoss]}>
+                          <Text style={[styles.recentBadgeText, { color: win ? theme.success : theme.textMuted }]}>{win ? 'WIN' : 'LOSS'}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.recentFooter}>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {r.sets.map((s, idx) => (
+                            <View key={idx} style={[styles.recentScoreBox, win && { borderColor: theme.success }]}>
+                              <Text style={[styles.recentScoreText, win && { color: theme.success }]}>{s.a}-{s.b}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <Text style={styles.recentDate}>{dateLabel}</Text>
+                      </View>
+                    </Card>
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.empty}>NO MATCHES YET</Text>
+                  <Text style={styles.emptySub}>Play and record a result to see your match history here.</Text>
+                </View>
+              }
+            />
+          )}
         </View>
       )}
     </View>
@@ -812,6 +885,18 @@ const styles = StyleSheet.create({
   },
   slotsText: { color: theme.textMuted, fontWeight: '900', fontSize: 9, letterSpacing: 0.5 },
 
+  recentCard: { borderRadius: cardRadius, marginBottom: 12 },
+  recentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  recentVs: { fontSize: 9, fontWeight: '900', color: theme.primary, letterSpacing: 0.5 },
+  recentOpponent: { fontSize: 14, fontWeight: '800', color: theme.text, letterSpacing: 0.2, marginTop: 2 },
+  recentBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+  recentBadgeWin: { backgroundColor: 'rgba(0, 230, 118, 0.1)', borderColor: theme.success },
+  recentBadgeLoss: { backgroundColor: 'rgba(110, 112, 126, 0.1)', borderColor: theme.border },
+  recentBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  recentFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10 },
+  recentScoreBox: { backgroundColor: '#1E1E28', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: theme.border },
+  recentScoreText: { fontSize: 12, fontWeight: '800', color: theme.textMuted },
+  recentDate: { fontSize: 9, fontWeight: '700', color: theme.textMuted },
   emptyContainer: { alignItems: 'center', marginTop: 40, paddingHorizontal: 20 },
   empty: { textAlign: 'center', color: theme.text, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
   emptySub: { textAlign: 'center', color: theme.textMuted, fontSize: 11, marginTop: 6, fontWeight: '700', lineHeight: 18 },

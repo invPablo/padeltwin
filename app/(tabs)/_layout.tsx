@@ -102,6 +102,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="home"
       tabBar={(props) => <CustomTabBar {...props} bottomInset={bottomInset} />}
       screenOptions={({ route }) => ({
         headerShown: true,

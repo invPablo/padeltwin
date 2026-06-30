@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View, Image, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import * as d3 from 'd3-shape';
 import { useSession } from '@/lib/useSession';
@@ -17,8 +17,6 @@ import {
   useFollowPlayer,
   useCompatiblePlayers,
   useToggleVib,
-  useFollowedLeaderboard,
-  useMyKopStatus,
   useScrimIndex,
   scrimIndexLabel,
   type FeedItem,
@@ -31,7 +29,6 @@ import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
 import { Card } from '@/components/Card';
 import { AppButton } from '@/components/AppButton';
-import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 
 function didWin(result: MatchResultWithProfiles, userId: string) {
   const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
@@ -72,12 +69,11 @@ export default function HomeScreen() {
   const { session } = useSession();
   const userId = session?.user.id;
   const { data: profile } = useProfile(userId);
-  const { data: kopStatus } = useMyKopStatus(userId);
   const { data: scrimIndex } = useScrimIndex(userId);
   const [scrimInfoOpen, setScrimInfoOpen] = useState(false);
   const scrollX = useRef(new Animated.Value(0)).current;
   const { data: stats, isLoading: statsLoading } = useMyStats(userId);
-  const { data: realRecentResults, isLoading: resultsLoading } = useRecentResults(userId, 100);
+  const { data: realRecentResults } = useRecentResults(userId, 100);
   const { data: leaderboard, isLoading: leaderboardLoading } = useLeaderboard(profile?.zone);
   const { data: upcomingMatches, isLoading: upcomingLoading } = useMyUpcomingMatches(userId);
   const { data: partnerRequests } = usePartnerRequests(userId);
@@ -130,7 +126,6 @@ export default function HomeScreen() {
   ] as unknown as FeedItem[];
   const { data: following } = useFollowing(userId);
   const { data: compatiblePlayers } = useCompatiblePlayers(userId, profile);
-  const { data: followedLeaderboard } = useFollowedLeaderboard(userId);
   const followPlayer = useFollowPlayer();
   const toggleVib = useToggleVib();
   const pendingRequestsCount = (partnerRequests ?? []).filter((r) => r.status === 'pending' && r.to_id === userId).length;
@@ -374,7 +369,7 @@ export default function HomeScreen() {
       ) : null}
 
       {/* PS Score Hero Carousel */}
-      <View style={{ marginBottom: 8, height: 300 }}>
+      <View style={{ marginBottom: 8, height: 200 }}>
         <Animated.ScrollView 
           horizontal 
           pagingEnabled 
@@ -432,7 +427,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={styles.rankBadge}>
                   <Ionicons name="trophy-outline" size={12} color={theme.accent} />
                   <Text style={styles.rankBadgeText}>{rankLabel}</Text>
@@ -467,7 +462,7 @@ export default function HomeScreen() {
                 <View>
                   <Text style={styles.heroLabel}>THIS MONTH</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-                    <Text style={[styles.eloScore, { fontSize: 30 }]}>{thisMonthMatches}</Text>
+                    <Text style={[styles.eloScore, { fontSize: 24 }]}>{thisMonthMatches}</Text>
                     <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600' }}>matches</Text>
                   </View>
                   <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.5 }}>
@@ -476,22 +471,22 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.heroLabel}>VS LAST MONTH</Text>
-                  <Text style={{ fontSize: 26, fontFamily: 'Anton_400Regular', color: monthDelta >= 0 ? theme.accent : '#FF3B30', marginTop: 4 }}>
+                  <Text style={{ fontSize: 22, fontFamily: 'Anton_400Regular', color: monthDelta >= 0 ? theme.accent : '#FF3B30', marginTop: 2 }}>
                     {monthDelta > 0 ? '+' : ''}{monthDelta}
                   </Text>
                 </View>
               </View>
 
               {/* Weekly activity bars */}
-              <View style={styles.weeklyBarsContainer}>
+              <View style={[styles.weeklyBarsContainer, { marginTop: 8 }]}>
                 {weeklyBars.map((week, i) => {
                   const total = week.wins + week.losses;
-                  const barH = total > 0 ? Math.max(6, Math.round((total / maxWeekTotal) * 54)) : 0;
+                  const barH = total > 0 ? Math.max(5, Math.round((total / maxWeekTotal) * 32)) : 0;
                   const winH = total > 0 ? Math.round((week.wins / total) * barH) : 0;
                   const lossH = barH - winH;
                   return (
                     <View key={i} style={styles.weeklyBarCol}>
-                      <View style={{ height: 54, justifyContent: 'flex-end' }}>
+                      <View style={{ height: 32, justifyContent: 'flex-end' }}>
                         {total > 0 ? (
                           <View style={{ height: barH, borderRadius: 3, overflow: 'hidden' }}>
                             <View style={{ height: winH, backgroundColor: theme.accent }} />
@@ -502,14 +497,14 @@ export default function HomeScreen() {
                         )}
                       </View>
                       <Text style={[styles.weeklyBarLabel, i === 7 ? { color: theme.accent } : {}]}>
-                        {i === 7 ? 'HOY' : i === 0 ? '-7S' : ''}
+                        {i === 7 ? 'NOW' : i === 0 ? '-7W' : ''}
                       </Text>
                     </View>
                   );
                 })}
               </View>
 
-              <View style={[styles.divider, { marginVertical: 10, backgroundColor: '#222' }]} />
+              <View style={[styles.divider, { marginVertical: 6, backgroundColor: '#222' }]} />
 
               {/* Personal records */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -569,15 +564,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Activity Heatmap */}
-      {userId && displayResults && displayResults.length > 0 && (
-        <Card>
-          <ActivityHeatmap
-            results={displayResults.map((r) => ({ created_at: r.created_at, won: didWin(r, userId) }))}
-          />
-        </Card>
-      )}
-
       {/* Scrim Index */}
       <Card style={{ borderLeftWidth: 3, borderLeftColor: theme.accent }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -612,88 +598,6 @@ export default function HomeScreen() {
         )}
       </Card>
 
-      <View style={styles.leaguesSectionHeader}>
-        <Text style={[styles.sectionTitle, { marginBottom: 0, fontSize: 18 }]}>LEAGUES</Text>
-        <Pressable onPress={() => router.push('/leagues' as any)}>
-          <Text style={styles.leaguesSeeAll}>SEE ALL</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.leagueTilesRow}>
-        <Pressable style={{ flex: 1 }} onPress={() => router.push('/leagues' as any)}>
-          {({ pressed }) => (
-            <Card style={[styles.leagueTile, pressed && { opacity: 0.9 }]} contentStyle={styles.leagueTileContent}>
-              <View style={styles.leagueTileRankBadge}>
-                <MaterialCommunityIcons name="podium" size={18} color={theme.accent} />
-              </View>
-              <Text style={styles.leagueTileTitle}>LEAGUE</Text>
-              <Text style={styles.leagueTileSub} numberOfLines={1}>
-                Ranked by pair
-              </Text>
-            </Card>
-          )}
-        </Pressable>
-
-        <Pressable style={{ flex: 1 }} onPress={() => router.push('/club-leaderboard' as any)}>
-          {({ pressed }) => (
-            <Card style={[styles.leagueTile, pressed && { opacity: 0.9 }]} contentStyle={styles.leagueTileContent}>
-              <View style={styles.kopTileHeader}>
-                <MaterialCommunityIcons name="crown" size={26} color="#FFD700" />
-                <View style={styles.proTag}>
-                  <Text style={styles.proTagText}>PRO</Text>
-                </View>
-              </View>
-              <Text style={styles.leagueTileTitle}>KOP</Text>
-              <Text style={styles.leagueTileSub} numberOfLines={1}>
-                {kopStatus ? `${kopStatus.crownedClubs.length} crown${kopStatus.crownedClubs.length === 1 ? '' : 's'} held` : 'No crowns yet'}
-              </Text>
-            </Card>
-          )}
-        </Pressable>
-      </View>
-
-      <Text style={[styles.sectionTitle, { marginTop: 16 }]}>RECENT MATCHES</Text>
-      {resultsLoading ? (
-        <ActivityIndicator color={theme.primary} style={{ marginTop: 12 }} />
-      ) : (
-        displayResults.slice(0, 5).map((r) => {
-          const win = didWin(r, userId!);
-          const matchDate = new Date(r.created_at);
-          const dateLabel = matchDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase();
-          return (
-            <Pressable key={r.id} onPress={() => router.push(`/match/${r.match_id || r.id}` as any)} style={({pressed}) => [pressed && {opacity: 0.8}]}>
-            <Card style={[styles.resultCard, { borderLeftWidth: 3, borderLeftColor: win ? theme.success : theme.border }]} contentStyle={{ padding: 16 }}>
-              <View style={styles.resultRow}>
-                <View style={styles.opponentWrapper}>
-                  <Text style={styles.vsTag}>VS</Text>
-                  <Text style={styles.resultOpponent} numberOfLines={1}>
-                    {opponents(r, userId!).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={[styles.resultBadge, win ? styles.winBadge : styles.lossBadge]}>
-                  <Text style={[styles.resultBadgeText, win ? styles.winText : styles.lossText]}>
-                    {win ? 'WIN' : 'LOSS'}
-                  </Text>
-                </View>
-              </View>
-            <View style={styles.resultCardFooter}>
-              <View style={styles.setScoresRow}>
-                {r.sets.map((s: any, idx: number) => (
-                  <View key={idx} style={[styles.scoreBox, win ? styles.scoreBoxWin : null]}>
-                <Text style={[styles.scoreText, win ? styles.scoreTextWin : null]}>{s.a}-{s.b}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.matchDateTag}>{dateLabel}</Text>
-                <Text style={styles.matchTypeTag}>DOUBLES</Text>
-              </View>
-              </View>
-            </Card>
-            </Pressable>
-          );
-        })
-      )}
 
       <Text style={styles.sectionTitle}>ACTIVITY FEED</Text>
       {feedLoading ? (
@@ -810,38 +714,6 @@ export default function HomeScreen() {
         </Card>
       )}
 
-      {followedLeaderboard && followedLeaderboard.length > 1 && (
-        <>
-          <Text style={styles.sectionTitle}>RANKING AMONG FRIENDS</Text>
-          <Card style={styles.leaderboardContainer} contentStyle={{ padding: 0 }}>
-            {followedLeaderboard.map((p, index) => {
-              const rank = index + 1;
-              const isMe = p.id === userId;
-              return (
-                <View
-                  key={p.id}
-                  style={[
-                    styles.leaderboardRow,
-                    rank === followedLeaderboard.length && { borderBottomWidth: 0 },
-                    isMe && styles.leaderboardRowMe,
-                  ]}
-                >
-                  <Text style={[styles.rankText, rank <= 3 && styles.rankTextTop]}>{rank < 10 ? `0${rank}` : rank}</Text>
-                  <View style={styles.playerAvatarPlaceholder}>
-                    <Image source={require('@/assets/images/icon.png')} style={styles.avatarLetterLogo} resizeMode="contain" />
-                  </View>
-                  <Text style={styles.leaderboardName} numberOfLines={1}>
-                    {isMe ? 'YOU' : (p.full_name ?? 'Player').toUpperCase()}
-                  </Text>
-                  {p.is_pro && <ProBadge size="sm" />}
-                  {p.coach_status === 'approved' && <CoachBadge size="sm" />}
-                  <Text style={styles.leaderboardElo}>{p.elo} <Text style={{ fontSize: 9, color: theme.textMuted }}>PS</Text></Text>
-                </View>
-              );
-            })}
-          </Card>
-        </>
-      )}
 
       <View style={styles.leaguesSectionHeader}>
         <Text style={[styles.sectionTitle, { marginBottom: 0, fontSize: 18 }]}>LEARNING</Text>

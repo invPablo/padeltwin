@@ -45,7 +45,6 @@ import {
   useActivityFeed,
 } from '@/lib/queries';
 import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS, ACHIEVEMENT_TIERS, TIER_COLORS } from '@/constants/achievements';
-import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { supabase } from '@/lib/supabase';
 import { pickAndUploadAvatar } from '@/lib/uploadAvatar';
 import type { PartnerRequestWithProfiles, PlayerLevel, MatchResultWithProfiles } from '@/types/database';
@@ -94,7 +93,6 @@ export default function ProfileScreen() {
   const { data: myAchievements, isLoading: achievementsLoading } = useMyAchievements(userId);
   const { data: stats, isLoading: statsLoading } = useMyStats(userId);
   const { data: recentResults, isLoading: resultsLoading } = useRecentResults(userId, 8);
-  const { data: heatmapResults } = useRecentResults(userId, 100);
   const { data: followedFeed } = useActivityFeed(userId, 3);
   const { data: followerCount } = useFollowerCount(userId);
   const { data: followingCount } = useFollowingCount(userId);
@@ -346,14 +344,6 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ACTIVITY HEATMAP */}
-        {userId && heatmapResults && heatmapResults.length > 0 && (
-          <Card>
-            <ActivityHeatmap
-              results={heatmapResults.map((r) => ({ created_at: r.created_at, won: didWin(r, userId) }))}
-            />
-          </Card>
-        )}
 
         {/* RECENT MATCHES */}
         <View style={styles.sectionHeaderRow}>
