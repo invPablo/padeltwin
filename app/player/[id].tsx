@@ -2,9 +2,8 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
+  Dimensions,
   Image,
-  ImageBackground,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,8 +12,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSession } from '@/lib/useSession';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from '@/lib/useSession';
 import {
   useProfile,
   useMyStats,
@@ -28,72 +28,83 @@ import {
   useFollowerCount,
   useFollowingCount,
   usePersonalRecords,
+  useScrimIndex,
+  scrimIndexLabel,
   useBlockedUsers,
   useBlockUser,
   useUnblockUser,
   useReportContent,
+  useMyPosts,
+  usePostsVibs,
+  useToggleVib,
+  type PostCardData,
 } from '@/lib/queries';
-import { ACHIEVEMENT_LABELS, ACHIEVEMENT_ICONS } from '@/constants/achievements';
-import { LEVEL_LABELS } from '@/constants/levels';
+import { ACHIEVEMENT_ICONS, ACHIEVEMENT_TIERS, TIER_COLORS } from '@/constants/achievements';
+import { ELO_PROVISIONAL_MATCHES, isEloProvisional } from '@/constants/elo';
+import { theme, cardRadius, buttonRadius } from '@/constants/theme';
 import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
-import { ELO_PROVISIONAL_MATCHES, isEloProvisional } from '@/constants/elo';
-import { theme, buttonRadius, cardRadius, chipRadius } from '@/constants/theme';
-import type { PartnerRequestWithProfiles, Profile, MatchResultWithProfiles } from '@/types/database';
+import { MatchCard } from '@/components/MatchCard';
+import { PostDetailModal } from '@/components/PostDetailModal';
+import { divisionProgress } from '@/lib/pairDivisions';
+import type { MatchResultWithProfiles, PartnerRequestWithProfiles } from '@/types/database';
 
-function requestWith(requests: PartnerRequestWithProfiles[], userId: string, otherId: string) {
-  return requests.find(
-    (r) => (r.from_id === userId && r.to_id === otherId) || (r.from_id === otherId && r.to_id === userId)
-  );
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const MASONRY_GAP = 10;
+const MASONRY_PADDING = 16;
+const COL_WIDTH = (SCREEN_WIDTH - MASONRY_PADDING * 2 - MASONRY_GAP) / 2;
+
+function cardHeightFor(id: string, index: number) {
+  const seed = (id.charCodeAt(0) + index) % 3;
+  return COL_WIDTH * (seed === 0 ? 1.5 : seed === 1 ? 1.2 : 1.35);
 }
 
-function didWin(result: MatchResultWithProfiles, playerId: string) {
-  const inTeamA = result.team_a_player1 === playerId || result.team_a_player2 === playerId;
+function didWin(result: MatchResultWithProfiles, userId: string) {
+  const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
   return (inTeamA && result.winner === 'a') || (!inTeamA && result.winner === 'b');
 }
 
-function opponents(result: MatchResultWithProfiles, playerId: string) {
-  const inTeamA = result.team_a_player1 === playerId || result.team_a_player2 === playerId;
-  const rivals = inTeamA
-    ? [result.team_b_player1_profile, result.team_b_player2_profile]
-    : [result.team_a_player1_profile, result.team_a_player2_profile];
-  return rivals.map((p) => p?.full_name ?? 'Player').join(' / ');
+function opponentProfile(result: MatchResultWithProfiles, userId: string) {
+  const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
+  return inTeamA
+    ? (result.team_b_player1 === userId ? result.team_a_player1_profile : result.team_b_player1_profile)
+    : (result.team_a_player1 === userId ? result.team_b_player1_profile : result.team_a_player1_profile);
 }
 
-function formatRelativeTime(dateString: string) {
-  const now = new Date();
-  const past = new Date(dateString);
-  const diffMs = now.getTime() - past.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+function requestWith(requests: PartnerRequestWithProfiles[], meId: string, otherId: string) {
+  return requests.find(
+    (r) => (r.from_id === meId && r.to_id === otherId) || (r.from_id === otherId && r.to_id === meId)
+  );
 }
 
 export default function PlayerProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useSession();
   const currentUserId = session?.user.id;
 
-  // Queries
-  const { data: profile, isLoading: profileLoading } = useProfile(id);
-  const { data: stats, isLoading: statsLoading } = useMyStats(id);
-  const { data: recentResults, isLoading: resultsLoading } = useRecentResults(id, 8);
+  const { data: profile, isLoading } = useProfile(id);
+  const { data: stats } = useMyStats(id);
+  const { data: scrimIndex } = useScrimIndex(id);
+  const { data: recentResults, isLoading: resultsLoading } = useRecentResults(id, 20);
   const { data: achievements } = useMyAchievements(id);
   const { data: following } = useFollowing(currentUserId);
   const { data: requests } = usePartnerRequests(currentUserId);
   const { data: followerCount } = useFollowerCount(id);
   const { data: followingCount } = useFollowingCount(id);
   const { data: records } = usePersonalRecords(id);
-
   const { data: blockedUsers } = useBlockedUsers(currentUserId);
+  const { data: playerPosts, isLoading: postsLoading } = useMyPosts(id);
 
-  // Mutations
+  const postIds = (playerPosts ?? []).map((p) => p.id);
+  const { data: postsVibs } = usePostsVibs(postIds, currentUserId);
+  const toggleVib = useToggleVib();
+
+  const [activeTab, setActiveTab] = useState<'posts' | 'matches'>('posts');
+  const [viewingPost, setViewingPost] = useState<PostCardData | null>(null);
+
   const followPlayer = useFollowPlayer();
   const unfollowPlayer = useUnfollowPlayer();
   const sendRequest = useSendPartnerRequest();
@@ -101,10 +112,50 @@ export default function PlayerProfileScreen() {
   const unblockUser = useUnblockUser();
   const reportContent = useReportContent();
 
+  if (isLoading || !profile) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator color={theme.accent} size="large" />
+      </View>
+    );
+  }
+
+  const isSelf = id === currentUserId;
+  const isFollowing = following?.has(id);
+  const followPending = followPlayer.isPending || unfollowPlayer.isPending;
+  const existing = currentUserId && requests ? requestWith(requests, currentUserId, id) : undefined;
+  const isConnected = existing?.status === 'accepted';
+  const isBlocked = blockedUsers?.has(id);
+
+  function handleFollowPress() {
+    if (!currentUserId || followPending || isSelf) return;
+    if (isFollowing) {
+      unfollowPlayer.mutate(
+        { followerId: currentUserId, followedId: id },
+        { onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['following'] }); queryClient.invalidateQueries({ queryKey: ['activityFeed'] }); } }
+      );
+    } else {
+      followPlayer.mutate(
+        { followerId: currentUserId, followedId: id },
+        { onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['following'] }); queryClient.invalidateQueries({ queryKey: ['activityFeed'] }); } }
+      );
+    }
+  }
+
+  function handleConnectPress() {
+    if (!currentUserId || existing || sendRequest.isPending || isSelf) return;
+    sendRequest.mutate({ fromId: currentUserId, toId: id });
+  }
+
+  function handleMessagePress() {
+    if (existing?.status === 'accepted') {
+      router.push({ pathname: '/chat/[requestId]', params: { requestId: existing.id } });
+    }
+  }
+
   function handleMorePress() {
-    if (!currentUserId || !id) return;
-    const isBlocked = blockedUsers?.has(id);
-    const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+    if (!currentUserId) return;
+    Alert.alert('More options', undefined, [
       {
         text: isBlocked ? 'Unblock' : 'Block',
         style: 'destructive',
@@ -121,7 +172,7 @@ export default function PlayerProfileScreen() {
       },
       {
         text: 'Report',
-        onPress: () => {
+        onPress: () =>
           Alert.alert('Report this player', 'What is the issue?', [
             { text: 'Cancel', style: 'cancel' },
             ...['Inappropriate profile', 'Harassment', 'Fake account', 'Other'].map((reason) => ({
@@ -132,210 +183,71 @@ export default function PlayerProfileScreen() {
                   { onSuccess: () => Alert.alert('Reported', "Thanks — we'll review it.") }
                 ),
             })),
-          ]);
-        },
+          ]),
       },
       { text: 'Cancel', style: 'cancel' },
-    ];
-    Alert.alert('More options', undefined, options as any);
+    ] as any);
   }
 
+  const rank = divisionProgress(profile.elo);
   const isCalibrating = isEloProvisional(stats?.played ?? 0);
 
   const recordItems: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string }[] = [];
-  if (records?.longestWinStreak) {
+  if (records?.longestWinStreak)
     recordItems.push({ icon: 'flame', value: `${records.longestWinStreak} wins`, label: 'Longest streak' });
-  }
-  if (records?.busiestMonth) {
+  if (records?.busiestMonth)
     recordItems.push({ icon: 'calendar', value: `${records.busiestMonth.count} matches`, label: records.busiestMonth.label });
-  }
-  if (records?.bestEloGain) {
+  if (records?.bestEloGain)
     recordItems.push({ icon: 'flash', value: `+${records.bestEloGain.delta} PS`, label: 'Best PS Score gain' });
-  }
 
-  if (profileLoading || !profile) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#FF7F37" />
-      </View>
-    );
-  }
-
-  const isSelf = id === currentUserId;
-  const isFollowing = following?.has(id);
-  const followPending = followPlayer.isPending || unfollowPlayer.isPending;
-
-  const handleFollowPress = () => {
-    if (!currentUserId || followPending) return;
-    if (isFollowing) {
-      unfollowPlayer.mutate(
-        { followerId: currentUserId, followedId: id },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["following"] });
-            queryClient.invalidateQueries({ queryKey: ["followedProfiles"] });
-            queryClient.invalidateQueries({ queryKey: ["activityFeed"] });
-          },
-        }
-      );
-    } else {
-      followPlayer.mutate(
-        { followerId: currentUserId, followedId: id },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["following"] });
-            queryClient.invalidateQueries({ queryKey: ["followedProfiles"] });
-            queryClient.invalidateQueries({ queryKey: ["activityFeed"] });
-          },
-        }
-      );
-    }
-  };
-
-  // Connection Request status
-  const existing = currentUserId && requests ? requestWith(requests, currentUserId, id) : undefined;
   let connectLabel = 'CONNECT';
-  let connectDisabled = false;
-  let connectColor = '#FF7F37';
-  let isConnected = false;
-
-  if (existing) {
-    if (existing.status === 'pending') {
-      connectLabel = 'PENDING';
-      connectDisabled = true;
-      connectColor = '#8E8E93';
-    } else if (existing.status === 'accepted') {
-      connectLabel = 'CONNECTED';
-      connectDisabled = true;
-      connectColor = '#34C759';
-      isConnected = true;
-    } else {
-      connectLabel = 'DECLINED';
-      connectDisabled = true;
-      connectColor = '#8E8E93';
-    }
-  }
-
-  const handleConnectPress = () => {
-    if (!currentUserId || existing || sendRequest.isPending || isSelf) return;
-    sendRequest.mutate({ fromId: currentUserId, toId: id });
-  };
-
-  const handleMessagePress = () => {
-    if (existing?.status === 'accepted') {
-      router.push({
-        pathname: '/chat/[requestId]',
-        params: { requestId: existing.id },
-      });
-    }
-  };
-
-  const initials = (profile.full_name ?? 'Player').slice(0, 2).toUpperCase();
+  let connectStyle = styles.connectBtn;
+  if (existing?.status === 'pending') { connectLabel = 'PENDING'; connectStyle = styles.connectBtnMuted; }
+  else if (existing?.status === 'accepted') { connectLabel = 'CONNECTED'; connectStyle = styles.connectBtnSuccess; }
+  else if (existing?.status === 'rejected') { connectLabel = 'DECLINED'; connectStyle = styles.connectBtnMuted; }
 
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-      
-      {/* 1. CURVED PHOTO COVER */}
-      <View style={styles.headerWrapper}>
-        <View style={styles.bannerContainer}>
+    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <View style={[styles.headerWrapper, { paddingTop: insets.top + 24 }]}>
+
+        {/* Top icons: back (left) + more (right) */}
+        <View style={[styles.topIconsRow, { top: insets.top + 16 }]}>
+          <Pressable style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color={theme.text} />
+          </Pressable>
+          {!isSelf && (
+            <Pressable style={({ pressed }) => [styles.topIconBtn, pressed && { opacity: 0.7 }]} onPress={handleMorePress}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={theme.text} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Avatar — no camera badge */}
+        <View style={styles.avatarCircleWrap}>
           {profile.avatar_url ? (
-            <ImageBackground 
-              source={{ uri: profile.avatar_url }} 
-              style={styles.bannerImage}
-              imageStyle={{ borderBottomLeftRadius: 40, borderBottomRightRadius: 40 }}
-            >
-              <View style={styles.bannerOverlay} />
-            </ImageBackground>
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarCircle} />
           ) : (
-            <View style={styles.bannerPlaceholder}>
-              <Image source={require('@/assets/images/icon.png')} style={styles.bannerPlaceholderLogo} resizeMode="contain" />
-              <View style={styles.bannerOverlay} />
+            <View style={styles.avatarCirclePlaceholder}>
+              <Image source={require('@/assets/images/icon.png')} style={styles.avatarCirclePlaceholderLogo} resizeMode="contain" />
             </View>
           )}
-
-          {/* Top Bar Navigation Icons */}
-          <View style={styles.headerNav}>
-            <Pressable style={styles.navIconBtn} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={20} color="#FFF" />
-            </Pressable>
-
-            {isSelf ? (
-              <Pressable style={styles.navIconBtn} onPress={() => router.navigate('/profile')}>
-                <Ionicons name="settings-sharp" size={18} color="#FFF" />
-              </Pressable>
-            ) : (
-              <Pressable style={styles.navIconBtn} onPress={handleMorePress}>
-                <Ionicons name="ellipsis-horizontal" size={18} color="#FFF" />
-              </Pressable>
-            )}
-          </View>
         </View>
 
-        {/* 2. THREE FLOATING BUTTONS */}
-        <View style={styles.actionRowFloating}>
-          {/* Left Button: Heart (Follow) */}
-          <Pressable 
-            style={({ pressed }) => [
-              styles.smallActionBtn,
-              pressed && { scale: 0.95 } as any
-            ]} 
-            disabled={followPending || isSelf}
-            onPress={handleFollowPress}
-          >
-            <Ionicons 
-              name={isFollowing ? "heart" : "heart-outline"} 
-              size={20} 
-              color={isFollowing ? "#FF7F37" : "#FFF"} 
-            />
-          </Pressable>
-
-          {/* Center Button: Connect (Primary Phone-Style Icon) */}
-          <Pressable 
-            style={({ pressed }) => [
-              styles.largeActionBtn,
-              { backgroundColor: connectColor },
-              (connectDisabled || isSelf) && { opacity: 0.9 },
-              pressed && !(connectDisabled || isSelf) && { scale: 0.95 } as any
-            ]}
-            disabled={connectDisabled || sendRequest.isPending || isSelf}
-            onPress={handleConnectPress}
-          >
-            {sendRequest.isPending ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Ionicons name="people" size={26} color="#FFF" />
-            )}
-          </Pressable>
-
-          {/* Right Button: Message (Chat) */}
-          <Pressable 
-            style={({ pressed }) => [
-              styles.smallActionBtn,
-              !isConnected && styles.smallActionBtnDisabled,
-              pressed && isConnected && { scale: 0.95 } as any
-            ]}
-            disabled={!isConnected}
-            onPress={handleMessagePress}
-          >
-            <Ionicons 
-              name="chatbubble" 
-              size={20} 
-              color={isConnected ? "#FF7F37" : "rgba(255, 255, 255, 0.25)"} 
-            />
-          </Pressable>
+        <View style={styles.nameRow}>
+          <Text style={styles.playerName}>{profile.full_name ?? 'Player'}</Text>
+          {profile.is_pro && <ProBadge />}
+          {profile.coach_status === 'approved' && <CoachBadge />}
         </View>
-      </View>
+        {profile.zone ? <Text style={styles.locationSub}>📍 {profile.zone}</Text> : null}
+        {(profile as any).bio ? <Text style={styles.bioText}>{(profile as any).bio}</Text> : null}
 
-      {/* WHITE HIGH-CONTRAST BODY */}
-      <View style={styles.contentBody}>
-        
-        {/* 3. TWO BADGES / PILLS */}
-        <View style={styles.badgeRow}>
-          <View style={styles.outlinedBadge}>
-            <Text style={styles.outlinedBadgeText}>
-              {profile.level ? LEVEL_LABELS[profile.level].toUpperCase() : 'NO LEVEL'}
-            </Text>
-          </View>
+        <View style={styles.badgeChipsRow}>
+          {rank && (
+            <View style={styles.rankChip}>
+              <Ionicons name="ribbon-outline" size={12} color={theme.accent} />
+              <Text style={styles.rankChipText}>{rank.division}</Text>
+            </View>
+          )}
           {profile.looking_for_partner && (
             <View style={styles.outlinedBadge}>
               <Text style={styles.outlinedBadgeText}>LOOKING FOR PARTNER</Text>
@@ -343,444 +255,271 @@ export default function PlayerProfileScreen() {
           )}
         </View>
 
-        {/* SOCIAL */}
-        <View style={styles.socialStatsRow}>
-          <Pressable
-            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
-            onPress={() => router.push(`/social/${id}?type=followers` as any)}
-          >
-            <Text style={styles.socialStatValue}>{followerCount ?? 0}</Text>
-            <Text style={styles.socialStatLabel}>Followers</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.socialStatColumn, pressed && { opacity: 0.7 }]}
-            onPress={() => router.push(`/social/${id}?type=following` as any)}
-          >
-            <Text style={styles.socialStatValue}>{followingCount ?? 0}</Text>
-            <Text style={styles.socialStatLabel}>Following</Text>
-          </Pressable>
-        </View>
-
-        {/* 4. NAME */}
-        <View style={styles.nameRow}>
-          <Text style={styles.playerName}>
-            {profile.full_name ?? 'Player'}
-          </Text>
-          {profile.is_pro && <ProBadge />}
-          {profile.coach_status === 'approved' && <CoachBadge />}
-        </View>
-
-        {profile.zone && (
-          <Text style={styles.locationSub}>
-            📍 {profile.zone.toUpperCase()}
-          </Text>
+        {/* Action row: Follow / Connect / Message */}
+        {!isSelf && (
+          <View style={styles.actionRow}>
+            <Pressable
+              style={[styles.followBtn, isFollowing && styles.followBtnActive]}
+              onPress={handleFollowPress}
+              disabled={followPending}
+            >
+              <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
+                {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[connectStyle, existing?.status === 'pending' && styles.connectBtnDisabled]}
+              onPress={handleConnectPress}
+              disabled={!!existing || sendRequest.isPending}
+            >
+              {sendRequest.isPending
+                ? <ActivityIndicator size="small" color={theme.onAccent} />
+                : <Text style={styles.connectBtnText}>{connectLabel}</Text>}
+            </Pressable>
+            <Pressable
+              style={[styles.messageBtn, !isConnected && { opacity: 0.3 }]}
+              onPress={handleMessagePress}
+              disabled={!isConnected}
+            >
+              <Ionicons name="chatbubble-outline" size={16} color={theme.text} />
+            </Pressable>
+          </View>
         )}
 
-        {/* 5. SPLIT STATS CARD */}
-        <View style={styles.statsCardContainer}>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
           <View style={styles.statColumn}>
-            <Text style={styles.statHugeText}>{profile.elo ?? 1200}</Text>
-            <Text style={styles.statSubLabel}>
-              {isCalibrating ? `Provisional • ${stats?.played ?? 0}/${ELO_PROVISIONAL_MATCHES}` : 'PS Score'}
+            <Text style={styles.statValue}>{playerPosts?.length ?? 0}</Text>
+            <Text style={styles.statLabel}>Posts</Text>
+          </View>
+          <Pressable style={styles.statColumn} onPress={() => router.push(`/social/${id}?type=followers` as any)}>
+            <Text style={styles.statValue}>{followerCount ?? 0}</Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </Pressable>
+          <Pressable style={styles.statColumn} onPress={() => router.push(`/social/${id}?type=following` as any)}>
+            <Text style={styles.statValue}>{followingCount ?? 0}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </Pressable>
+          <View style={styles.statColumn}>
+            <Text style={[styles.statValue, { color: theme.accent }]}>
+              {isCalibrating ? `${stats?.played ?? 0}/${ELO_PROVISIONAL_MATCHES}` : profile.elo}
             </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statColumn}>
-            <Text style={styles.statHugeText}>{stats?.played ?? 0}</Text>
-            <Text style={styles.statSubLabel}>Matches Played</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statColumn}>
-            <Text style={styles.statHugeText}>{stats?.winRate ?? 0}%</Text>
-            <Text style={styles.statSubLabel}>Win Rate</Text>
+            <Text style={styles.statLabel}>{isCalibrating ? 'Calibrating' : 'PS Score'}</Text>
           </View>
         </View>
 
-        {/* RECORDS */}
-        {recordItems.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Personal records</Text>
-            <View style={styles.recordsCardContainer}>
-              {recordItems.map((item, index) => (
-                <View key={item.label} style={styles.recordItem}>
-                  {index > 0 && <View style={styles.statDivider} />}
-                  <View style={styles.recordColumn}>
-                    <Ionicons name={item.icon} size={18} color={theme.accent} />
-                    <Text style={styles.recordValue}>{item.value}</Text>
-                    <Text style={styles.recordLabel}>{item.label}</Text>
-                  </View>
-                </View>
-              ))}
+        <View style={styles.secondaryStatsRow}>
+          <Text style={styles.secondaryStat}>{stats?.played ?? 0} matches · {stats?.winRate ?? 0}% win rate</Text>
+          {scrimIndex != null && (
+            <View style={[styles.scrimPill, { borderColor: scrimIndex >= 7 ? theme.success : scrimIndex >= 5 ? theme.accent : theme.danger }]}>
+              <Text style={styles.scrimPillText}>{scrimIndex.toFixed(1)} {scrimIndexLabel(scrimIndex)}</Text>
             </View>
-          </>
+          )}
+        </View>
+
+        {recordItems.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recordsRow}>
+            {recordItems.map((item) => (
+              <View key={item.label} style={styles.recordChip}>
+                <Ionicons name={item.icon} size={13} color={theme.accent} />
+                <Text style={styles.recordChipText}>{item.value}</Text>
+              </View>
+            ))}
+          </ScrollView>
         )}
 
-        {/* 6. REVIEWS / RECENT MATCHES SECTION */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Recent matches</Text>
-          <Text style={styles.seeAllBtn}>See All</Text>
-        </View>
-
-        {/* Horizontal scroll of reviews / match cards */}
-        {resultsLoading ? (
-          <ActivityIndicator color="#FF7F37" style={{ marginTop: 12 }} />
-        ) : recentResults && recentResults.length > 0 ? (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            contentContainerStyle={styles.horizontalScroll}
-          >
-            {recentResults.slice(0, 5).map((r) => {
-              const win = didWin(r, id);
-              const opponentProfile = win 
-                ? (r.team_b_player1 === id ? r.team_a_player1_profile : r.team_b_player1_profile)
-                : (r.team_a_player1 === id ? r.team_b_player1_profile : r.team_a_player1_profile);
-              
-              const opponentName = opponentProfile?.full_name ?? 'Padel Player';
-              const opponentAvatar = opponentProfile?.avatar_url;
-              const scoreString = r.sets.map(s => `${s.a}-${s.b}`).join(', ');
-
+        {achievements && achievements.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.achievementsRow}>
+            {achievements.map((item) => {
+              const iconName = ACHIEVEMENT_ICONS[item.type] || 'trophy';
+              const tier = ACHIEVEMENT_TIERS[item.type] || 'bronze';
+              const tierColor = TIER_COLORS[tier];
               return (
-                <View key={r.id} style={styles.horizontalReviewCard}>
-                  <View style={styles.cardHeaderRow}>
-                    {/* Small avatar on left */}
-                    {opponentAvatar ? (
-                      <Image source={{ uri: opponentAvatar }} style={styles.smallAvatar} />
-                    ) : (
-                      <View style={styles.smallAvatarPlaceholder}>
-                        <Image source={require('@/assets/images/icon.png')} style={styles.smallAvatarPlaceholderLogo} resizeMode="contain" />
-                      </View>
-                    )}
-                    
-                    {/* Name & Details Column */}
-                    <View style={styles.cardInfoCol}>
-                      <Text style={styles.cardOpponentName} numberOfLines={1}>
-                        {opponentName}
-                      </Text>
-                      <View style={styles.cardRatingRow}>
-                        <Ionicons name="trophy" size={11} color="#FF7F37" style={{ marginRight: 4 }} />
-                        <Text style={styles.cardResultText}>
-                          {win ? 'Won' : 'Lost'} {scoreString}
-                        </Text>
-                        <Text style={styles.cardTimeText}>
-                          {"  "}•{"  "}{formatRelativeTime(r.created_at)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Three dots button */}
-                    <Ionicons name="ellipsis-vertical" size={16} color="#8E8E93" />
-                  </View>
-
-                  {/* Comment/vs text */}
-                  <Text style={styles.cardBodyText} numberOfLines={3}>
-                    Played a competitive doubles match in {profile.zone ?? 'local zone'}. {win ? 'Great performance securing a solid victory with consistent points.' : 'Tough match, fought hard but opponent played key points better.'}
-                  </Text>
+                <View key={item.id} style={[styles.achievementBadge, { borderColor: tierColor, backgroundColor: `${tierColor}1A` }]}>
+                  <Ionicons name={iconName as any} size={16} color={tierColor} />
                 </View>
               );
             })}
           </ScrollView>
-        ) : (
-          <Text style={styles.emptyText}>No match results recorded yet.</Text>
         )}
-
       </View>
+
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        <Pressable style={[styles.tabBtn, activeTab === 'posts' && styles.tabBtnActive]} onPress={() => setActiveTab('posts')}>
+          <Ionicons name="albums-outline" size={18} color={activeTab === 'posts' ? theme.text : theme.textMuted} />
+        </Pressable>
+        <Pressable style={[styles.tabBtn, activeTab === 'matches' && styles.tabBtnActive]} onPress={() => setActiveTab('matches')}>
+          <Ionicons name="tennisball-outline" size={18} color={activeTab === 'matches' ? theme.text : theme.textMuted} />
+        </Pressable>
+      </View>
+
+      {activeTab === 'posts' ? (
+        postsLoading ? (
+          <ActivityIndicator color={theme.accent} style={{ marginTop: 30 }} />
+        ) : playerPosts && playerPosts.length > 0 ? (
+          <View style={styles.masonryRow}>
+            <View style={styles.masonryCol}>
+              {playerPosts.filter((_, i) => i % 2 === 0).map((p, i) => (
+                <MatchCard
+                  key={p.id}
+                  post={p}
+                  posterId={id}
+                  width={COL_WIDTH}
+                  height={cardHeightFor(p.id, i)}
+                  onPress={() => setViewingPost(p)}
+                  vibCount={postsVibs?.[p.id]?.count}
+                  vibbedByMe={postsVibs?.[p.id]?.vibbedByMe}
+                  onToggleVib={() => currentUserId && toggleVib.mutate({ profileId: currentUserId, itemType: 'post', itemId: p.id, currentlyVibbed: postsVibs?.[p.id]?.vibbedByMe ?? false })}
+                />
+              ))}
+            </View>
+            <View style={styles.masonryCol}>
+              {playerPosts.filter((_, i) => i % 2 === 1).map((p, i) => (
+                <MatchCard
+                  key={p.id}
+                  post={p}
+                  posterId={id}
+                  width={COL_WIDTH}
+                  height={cardHeightFor(p.id, i + 1)}
+                  onPress={() => setViewingPost(p)}
+                  vibCount={postsVibs?.[p.id]?.count}
+                  vibbedByMe={postsVibs?.[p.id]?.vibbedByMe}
+                  onToggleVib={() => currentUserId && toggleVib.mutate({ profileId: currentUserId, itemType: 'post', itemId: p.id, currentlyVibbed: postsVibs?.[p.id]?.vibbedByMe ?? false })}
+                />
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.emptyTab}>
+            <Ionicons name="camera-outline" size={32} color={theme.textMuted} />
+            <Text style={styles.emptyTabText}>No posts yet</Text>
+          </View>
+        )
+      ) : resultsLoading ? (
+        <ActivityIndicator color={theme.accent} style={{ marginTop: 30 }} />
+      ) : recentResults && recentResults.length > 0 ? (
+        <View style={styles.matchesList}>
+          {recentResults.map((r) => {
+            const win = didWin(r, id);
+            const opp = opponentProfile(r, id);
+            return (
+              <Pressable
+                key={r.id}
+                onPress={() => router.push(`/match/${r.match_id || r.id}` as any)}
+                style={({ pressed }) => [styles.matchRow, pressed && { opacity: 0.8 }]}
+              >
+                <View style={[styles.matchResultDot, { backgroundColor: win ? theme.success : theme.danger }]} />
+                <Text style={styles.matchOpponent} numberOfLines={1}>vs {opp?.full_name ?? 'Player'}</Text>
+                <Text style={styles.matchScore}>{r.sets.map((s) => `${s.a}-${s.b}`).join(', ')}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.emptyTab}>
+          <Ionicons name="tennisball-outline" size={32} color={theme.textMuted} />
+          <Text style={styles.emptyTabText}>No matches recorded yet</Text>
+        </View>
+      )}
+
+      <PostDetailModal post={viewingPost} userId={currentUserId} onClose={() => setViewingPost(null)} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background, // Dark Theme background
-  },
-  centerContainer: {
-    flex: 1,
-    backgroundColor: theme.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerWrapper: {
-    position: 'relative',
-    width: '100%',
-    zIndex: 10,
-    backgroundColor: theme.background,
-  },
-  bannerContainer: {
-    height: 320,
-    width: '100%',
-    backgroundColor: '#1C1C1E',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    overflow: 'hidden',
-  },
-  bannerPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E1E24',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  bannerPlaceholderLogo: { width: 100, height: 100, opacity: 0.2 },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  headerNav: {
+  container: { flex: 1, backgroundColor: theme.background },
+  centerContainer: { flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' },
+  headerWrapper: { alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24 },
+  topIconsRow: {
     position: 'absolute',
-    top: 50,
-    left: 20,
-    right: 20,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  navIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  actionRowFloating: {
-    position: 'absolute',
-    bottom: -28,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
     zIndex: 30,
   },
-  smallActionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#111111',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 5,
+  topIconBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
+    alignItems: 'center', justifyContent: 'center',
   },
-  smallActionBtnDisabled: {
-    opacity: 0.3,
+  avatarCircleWrap: { width: 96, height: 96, marginBottom: 10 },
+  avatarCircle: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: theme.accent },
+  avatarCirclePlaceholder: {
+    width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: theme.accent,
+    backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center',
   },
-  largeActionBtn: {
-    width: 68,
-    height: 68,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#FF7F37',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
+  avatarCirclePlaceholderLogo: { width: 48, height: 48, opacity: 0.5 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  playerName: { fontFamily: 'Anton_400Regular', fontSize: 20, color: theme.text, letterSpacing: -0.3 },
+  locationSub: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 6 },
+  bioText: { color: theme.text, fontSize: 12, textAlign: 'center', marginBottom: 8, lineHeight: 17, paddingHorizontal: 16 },
+  badgeChipsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  rankChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1,
+    borderColor: 'rgba(198, 255, 51, 0.3)', backgroundColor: 'rgba(198, 255, 51, 0.08)',
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4,
   },
-  contentBody: {
-    flex: 1,
-    backgroundColor: theme.background,
-    paddingTop: 48,
-    paddingBottom: 40,
+  rankChipText: { color: theme.accent, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  outlinedBadge: { borderWidth: 1, borderColor: theme.border, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  outlinedBadgeText: { color: theme.text, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  actionRow: { flexDirection: 'row', gap: 8, marginBottom: 14, alignItems: 'center' },
+  followBtn: {
+    flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 10,
+    paddingVertical: 9, alignItems: 'center',
   },
-  badgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
+  followBtnActive: { backgroundColor: theme.card, borderColor: theme.accent },
+  followBtnText: { color: theme.text, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  followBtnTextActive: { color: theme.accent },
+  connectBtn: {
+    flex: 1, backgroundColor: theme.accent, borderRadius: 10,
+    paddingVertical: 9, alignItems: 'center',
   },
-  outlinedBadge: {
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  connectBtnMuted: {
+    flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border,
+    borderRadius: 10, paddingVertical: 9, alignItems: 'center',
   },
-  outlinedBadgeText: {
-    color: theme.text,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  connectBtnSuccess: {
+    flex: 1, backgroundColor: `${theme.success}22`, borderWidth: 1, borderColor: theme.success,
+    borderRadius: 10, paddingVertical: 9, alignItems: 'center',
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+  connectBtnDisabled: { opacity: 0.6 },
+  connectBtnText: { color: theme.onAccent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  messageBtn: {
+    width: 38, height: 38, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
+    backgroundColor: theme.card, alignItems: 'center', justifyContent: 'center',
   },
-  playerName: {
-    fontSize: 26,
-    
-    color: theme.text,
-    letterSpacing: -0.5,
-    textAlign: 'center',
-   textTransform: 'uppercase'},
-  locationSub: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textMuted,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    marginBottom: 24,
+  statsRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-around', marginBottom: 10 },
+  statColumn: { alignItems: 'center' },
+  statValue: { fontFamily: 'Anton_400Regular', fontSize: 18, color: theme.text },
+  statLabel: { fontSize: 10, color: theme.textMuted, marginTop: 2, fontWeight: '600' },
+  secondaryStatsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  secondaryStat: { color: theme.textMuted, fontSize: 11, fontWeight: '600' },
+  scrimPill: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  scrimPillText: { color: theme.text, fontSize: 10, fontWeight: '800' },
+  recordsRow: { gap: 8, marginBottom: 8 },
+  recordChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: theme.border,
+    backgroundColor: theme.card, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6,
   },
-  statsCardContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.card,
-    borderRadius: 24,
-    paddingVertical: 18,
-    paddingHorizontal: 10,
-    marginHorizontal: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: theme.border,
+  recordChipText: { color: theme.text, fontSize: 10, fontWeight: '700' },
+  achievementsRow: { gap: 8 },
+  achievementBadge: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  tabRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.border },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabBtnActive: { borderBottomColor: theme.accent },
+  masonryRow: { flexDirection: 'row', gap: MASONRY_GAP, paddingHorizontal: MASONRY_PADDING, paddingTop: 4 },
+  masonryCol: { flex: 1, gap: MASONRY_GAP },
+  emptyTab: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 10 },
+  emptyTabText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
+  matchesList: { paddingBottom: 40 },
+  matchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
   },
-  statColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statHugeText: {
-    fontFamily: 'Anton_400Regular',
-    fontSize: 22,
-    color: theme.text,
-    letterSpacing: -0.5,
-  },
-  statSubLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: theme.textMuted,
-    marginTop: 4,
-  },
-  statDivider: {
-    width: 1.5,
-    height: 32,
-    backgroundColor: theme.border,
-  },
-  socialStatsRow: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 10 },
-  socialStatColumn: { alignItems: 'center' },
-  socialStatValue: { fontSize: 15, fontWeight: '800', color: theme.text },
-  socialStatLabel: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
-  recordsCardContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.card,
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: theme.border,
-    marginTop: 10,
-  },
-  recordItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  recordColumn: { flex: 1, alignItems: 'center' },
-  recordValue: { fontSize: 13, fontWeight: '800', color: theme.text, marginTop: 6, textAlign: 'center' },
-  recordLabel: { fontSize: 10, fontWeight: '500', color: theme.textMuted, marginTop: 2, textAlign: 'center' },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    
-    color: theme.text,
-   textTransform: 'uppercase'},
-  seeAllBtn: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FF7F37',
-  },
-  horizontalScroll: {
-    paddingHorizontal: 24,
-    gap: 12,
-    paddingBottom: 24,
-  },
-  horizontalReviewCard: {
-    width: 290,
-    backgroundColor: theme.card,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  smallAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-  },
-  smallAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  smallAvatarPlaceholderLogo: { width: 18, height: 18, opacity: 0.5 },
-  cardInfoCol: {
-    flex: 1,
-  },
-  cardOpponentName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.text,
-  },
-  cardRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  cardResultText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.text,
-  },
-  cardTimeText: {
-    fontSize: 9,
-    fontWeight: '500',
-    color: theme.textMuted,
-  },
-  cardBodyText: {
-    fontSize: 11,
-    color: theme.textMuted,
-    lineHeight: 16,
-  },
-  emptyText: {
-    paddingHorizontal: 24,
-    color: theme.textMuted,
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
+  matchResultDot: { width: 8, height: 8, borderRadius: 4 },
+  matchOpponent: { flex: 1, color: theme.text, fontSize: 13, fontWeight: '700' },
+  matchScore: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
 });

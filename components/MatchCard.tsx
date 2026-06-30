@@ -22,12 +22,13 @@ interface MatchCardProps {
   width: number;
   height?: number;
   onPress?: () => void;
+  onLongPress?: () => void;
   vibCount?: number;
   vibbedByMe?: boolean;
   onToggleVib?: () => void;
 }
 
-export function MatchCard({ post, posterId, width, height, onPress, vibCount, vibbedByMe, onToggleVib }: MatchCardProps) {
+export function MatchCard({ post, posterId, width, height, onPress, onLongPress, vibCount, vibbedByMe, onToggleVib }: MatchCardProps) {
   const result = post.matchResult;
   const win = result ? didWin(result, posterId) : null;
   const scoreline = result ? result.sets.map((s) => `${s.a}-${s.b}`).join('  ') : null;
@@ -36,7 +37,7 @@ export function MatchCard({ post, posterId, width, height, onPress, vibCount, vi
   const frameColor = win === true ? theme.accent : win === false ? theme.danger : theme.border;
 
   return (
-    <Pressable onPress={onPress} style={[styles.card, { width, height: height ?? width * 1.25, borderColor: frameColor }]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} delayLongPress={400} style={[styles.card, { width, height: height ?? width * 1.25, borderColor: frameColor }]}>
       <Image source={{ uri: post.photo_url }} style={StyleSheet.absoluteFillObject as any} />
       <View style={styles.scrim} />
 

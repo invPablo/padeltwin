@@ -17,6 +17,7 @@ import {
   useFollowPlayer,
   useCompatiblePlayers,
   useToggleVib,
+  useDeletePost,
   useScrimIndex,
   scrimIndexLabel,
   type FeedItem,
@@ -29,7 +30,8 @@ import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
 import { Card } from '@/components/Card';
 import { MatchCard } from '@/components/MatchCard';
-import { PhotoViewerModal } from '@/components/PhotoViewerModal';
+import { PostDetailModal } from '@/components/PostDetailModal';
+import { PostRadialMenu } from '@/components/PostRadialMenu';
 import type { PostCardData } from '@/lib/queries';
 import { AppButton } from '@/components/AppButton';
 
@@ -74,7 +76,9 @@ export default function HomeScreen() {
   const { data: profile } = useProfile(userId);
   const { data: scrimIndex } = useScrimIndex(userId);
   const [scrimInfoOpen, setScrimInfoOpen] = useState(false);
-  const [viewingPhoto, setViewingPhoto] = useState<PostCardData | null>(null);
+  const [viewingPost, setViewingPost] = useState<PostCardData | null>(null);
+  const [radialPost, setRadialPost] = useState<PostCardData | null>(null);
+  const deletePost = useDeletePost();
   const scrollX = useRef(new Animated.Value(0)).current;
   const { data: stats, isLoading: statsLoading } = useMyStats(userId);
   const { data: realRecentResults } = useRecentResults(userId, 100);
@@ -601,10 +605,8 @@ export default function HomeScreen() {
                       vibCount={item.vibCount}
                       vibbedByMe={item.vibbedByMe}
                       onToggleVib={() => handleToggleVib(item)}
-                      onPress={() => {
-                        if (item.match_id) router.push(`/match/${item.match_id}` as any);
-                        else setViewingPhoto(item);
-                      }}
+                      onPress={() => setViewingPost(item)}
+                      onLongPress={() => setRadialPost(item)}
                     />
                   </View>
                 </View>
@@ -739,11 +741,27 @@ export default function HomeScreen() {
         )}
       </Pressable>
 
-      <PhotoViewerModal
-        visible={!!viewingPhoto}
-        photoUrl={viewingPhoto?.photo_url ?? null}
-        caption={viewingPhoto?.caption}
-        onClose={() => setViewingPhoto(null)}
+      <PostDetailModal
+        post={viewingPost}
+        userId={userId}
+        onClose={() => setViewingPost(null)}
+      />
+      <PostRadialMenu
+        post={radialPost}
+        isOwner={radialPost?.profile_id === userId}
+        vibbedByMe={(activityFeed?.find((i) => i.id === radialPost?.id) as any)?.vibbedByMe ?? false}
+        onClose={() => setRadialPost(null)}
+        onVib={() => {
+          const feedItem = activityFeed?.find((i) => i.id === radialPost?.id);
+          if (feedItem && feedItem.kind === 'post') handleToggleVib(feedItem);
+          setRadialPost(null);
+        }}
+        onPin={() => setRadialPost(null)}
+        onDelete={() => {
+          if (!radialPost) return;
+          deletePost.mutate({ postId: radialPost.id, photoUrl: radialPost.photo_url });
+          setRadialPost(null);
+        }}
       />
     </ScrollView>
   );

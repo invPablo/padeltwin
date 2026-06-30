@@ -846,6 +846,7 @@ export function useToggleVib() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["activityFeed"] });
       queryClient.invalidateQueries({ queryKey: ["itemVibs", vars.itemType, vars.itemId] });
+      queryClient.invalidateQueries({ queryKey: ["postsVibs"] });
     },
   });
 }
@@ -895,6 +896,24 @@ export function useNotifications(userId: string | undefined) {
       return (data ?? []) as AppNotification[];
     },
     enabled: !!userId,
+  });
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { postId: string; photoUrl: string }) => {
+      const { error } = await supabase.from("posts").delete().eq("id", vars.postId);
+      if (error) throw error;
+      // Best-effort storage cleanup — ignore errors (file may not exist or path may differ)
+      const path = vars.photoUrl.split("/posts/")[1];
+      if (path) await supabase.storage.from("posts").remove([decodeURIComponent(path)]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activityFeed"] });
+      queryClient.invalidateQueries({ queryKey: ["myPosts"] });
+      queryClient.invalidateQueries({ queryKey: ["postsVibs"] });
+    },
   });
 }
 
@@ -1645,4 +1664,95 @@ export function scrimIndexLabel(score: number): string {
   if (score >= 5) return 'STEADY';
   if (score >= 3) return 'COOLING OFF';
   return 'OUT OF FORM';
+}
+
+// Batch fetch vib counts + whether the current user vibbed each post.
+// Single query so the profile masonry grid doesn't fire N+1 requests.
+export function usePostsVibs(postIds: string[], userId: string | undefined) {
+  const sortedIds = postIds.slice().sort();
+  return useQuery({
+    queryKey: ["postsVibs", sortedIds, userId],
+    queryFn: async () => {
+      if (!postIds.length) return {} as Record<string, { count: number; vibbedByMe: boolean }>;
+      const { data, error } = await supabase
+        .from("vibs")
+        .select("item_id, profile_id")
+        .eq("item_type", "post")
+        .in("item_id", postIds);
+      if (error) throw error;
+      const result: Record<string, { count: number; vibbedByMe: boolean }> = {};
+      for (const row of data ?? []) {
+        if (!result[row.item_id]) result[row.item_id] = { count: 0, vibbedByMe: false };
+        result[row.item_id].count++;
+        if (row.profile_id === userId) result[row.item_id].vibbedByMe = true;
+      }
+      return result;
+    },
+    enabled: postIds.length > 0,
+  });
+}
+
+// Batch comment counts for a list of post IDs — one query for the whole grid.
+export function usePostCommentCounts(postIds: string[]) {
+  const sortedIds = postIds.slice().sort();
+  return useQuery({
+    queryKey: ["postCommentCounts", sortedIds],
+    queryFn: async () => {
+      if (!postIds.length) return {} as Record<string, number>;
+      const { data, error } = await supabase
+        .from("post_comments")
+        .select("post_id")
+        .in("post_id", postIds);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of data ?? []) {
+        counts[row.post_id] = (counts[row.post_id] ?? 0) + 1;
+      }
+      return counts;
+    },
+    enabled: postIds.length > 0,
+  });
+}
+
+export interface PostComment {
+  id: string;
+  post_id: string;
+  profile_id: string;
+  body: string;
+  created_at: string;
+  profiles: { id: string; full_name: string | null; avatar_url: string | null };
+}
+
+export function usePostComments(postId: string | undefined) {
+  return useQuery({
+    queryKey: ["postComments", postId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("post_comments")
+        .select("*, profiles(id, full_name, avatar_url)")
+        .eq("post_id", postId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as PostComment[];
+    },
+    enabled: !!postId,
+  });
+}
+
+export function useAddComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { postId: string; profileId: string; body: string }) => {
+      const { error } = await supabase.from("post_comments").insert({
+        post_id: vars.postId,
+        profile_id: vars.profileId,
+        body: vars.body.trim(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["postComments", vars.postId] });
+      queryClient.invalidateQueries({ queryKey: ["postCommentCounts"] });
+    },
+  });
 }

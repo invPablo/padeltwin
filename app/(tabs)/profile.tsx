@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/useSession';
 import {
   useProfile,
@@ -19,6 +17,9 @@ import {
   useScrimIndex,
   scrimIndexLabel,
   useUnreadNotificationCount,
+  usePostsVibs,
+  useToggleVib,
+  useDeletePost,
 } from '@/lib/queries';
 import { ACHIEVEMENT_ICONS, ACHIEVEMENT_TIERS, TIER_COLORS } from '@/constants/achievements';
 import { pickAndUploadAvatar } from '@/lib/uploadAvatar';
@@ -27,7 +28,8 @@ import { theme, cardRadius } from '@/constants/theme';
 import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
 import { MatchCard } from '@/components/MatchCard';
-import { PhotoViewerModal } from '@/components/PhotoViewerModal';
+import { PostDetailModal } from '@/components/PostDetailModal';
+import { PostRadialMenu } from '@/components/PostRadialMenu';
 import type { PostCardData } from '@/lib/queries';
 import { divisionProgress } from '@/lib/pairDivisions';
 
@@ -72,30 +74,17 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'matches' | 'search'>('posts');
-  const [searchQuery, setSearchQuery] = useState('');
-  const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['profileTabSearch', searchQuery],
-    queryFn: async () => {
-      if (!searchQuery.trim()) return [];
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('full_name', `%${searchQuery}%`)
-        .limit(20);
-      if (error) throw error;
-      return data;
-    },
-    enabled: searchQuery.length > 1,
-  });
-  const [viewingPhoto, setViewingPhoto] = useState<PostCardData | null>(null);
+  const [activeTab, setActiveTab] = useState<'posts' | 'matches'>('posts');
+  const [viewingPost, setViewingPost] = useState<PostCardData | null>(null);
+  const [radialPost, setRadialPost] = useState<PostCardData | null>(null);
+
+  const postIds = (myPosts ?? []).map((p) => p.id);
+  const { data: postsVibs } = usePostsVibs(postIds, userId);
+  const toggleVib = useToggleVib();
+  const deletePost = useDeletePost();
 
   function handlePostPress(post: PostCardData) {
-    if (post.match_id) {
-      router.push(`/match/${post.match_id}` as any);
-    } else {
-      setViewingPhoto(post);
-    }
+    setViewingPost(post);
   }
 
   if (isLoading || !userId || !profile) {
@@ -130,6 +119,7 @@ export default function ProfileScreen() {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
       <View style={[styles.headerWrapper, { paddingTop: insets.top + 24 }]}>
         <View style={[styles.topIconsRow, { top: insets.top + 16 }]}>
@@ -256,49 +246,9 @@ export default function ProfileScreen() {
         <Pressable style={[styles.tabBtn, activeTab === 'matches' && styles.tabBtnActive]} onPress={() => setActiveTab('matches')}>
           <Ionicons name="tennisball-outline" size={18} color={activeTab === 'matches' ? theme.text : theme.textMuted} />
         </Pressable>
-        <Pressable style={[styles.tabBtn, activeTab === 'search' && styles.tabBtnActive]} onPress={() => setActiveTab('search')}>
-          <Ionicons name="search-outline" size={18} color={activeTab === 'search' ? theme.text : theme.textMuted} />
-        </Pressable>
       </View>
 
-      {activeTab === 'search' ? (
-        <View style={styles.searchTab}>
-          <View style={styles.searchInputWrap}>
-            <Ionicons name="search" size={16} color={theme.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search players..."
-              placeholderTextColor={theme.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-            />
-          </View>
-          {searchLoading && searchQuery.length > 1 && <ActivityIndicator color={theme.accent} style={{ marginTop: 20 }} />}
-          {!searchLoading && searchQuery.length > 1 && (!searchResults || searchResults.length === 0) && (
-            <Text style={styles.emptyTabText}>No players found for "{searchQuery}"</Text>
-          )}
-          {searchResults?.map((p) => (
-            <Pressable
-              key={p.id}
-              style={({ pressed }) => [styles.searchRow, pressed && { opacity: 0.8 }]}
-              onPress={() => router.push(`/player/${p.id}` as any)}
-            >
-              {p.avatar_url ? (
-                <Image source={{ uri: p.avatar_url }} style={styles.searchAvatar} />
-              ) : (
-                <View style={styles.searchAvatarPlaceholder}>
-                  <Ionicons name="person" size={18} color={theme.textMuted} />
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.searchName}>{p.full_name ?? 'Player'}</Text>
-                <Text style={styles.searchMeta}>{p.zone ?? 'No zone'} · PS {p.elo}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      ) : activeTab === 'posts' ? (
+      {activeTab === 'posts' ? (
         postsLoading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 30 }} />
         ) : myPosts && myPosts.length > 0 ? (
@@ -312,6 +262,10 @@ export default function ProfileScreen() {
                   width={COL_WIDTH}
                   height={cardHeightFor(p.id, i)}
                   onPress={() => handlePostPress(p)}
+                  onLongPress={() => setRadialPost(p)}
+                  vibCount={postsVibs?.[p.id]?.count}
+                  vibbedByMe={postsVibs?.[p.id]?.vibbedByMe}
+                  onToggleVib={() => userId && toggleVib.mutate({ profileId: userId, itemType: 'post', itemId: p.id, currentlyVibbed: postsVibs?.[p.id]?.vibbedByMe ?? false })}
                 />
               ))}
             </View>
@@ -324,6 +278,10 @@ export default function ProfileScreen() {
                   width={COL_WIDTH}
                   height={cardHeightFor(p.id, i + 1)}
                   onPress={() => handlePostPress(p)}
+                  onLongPress={() => setRadialPost(p)}
+                  vibCount={postsVibs?.[p.id]?.count}
+                  vibbedByMe={postsVibs?.[p.id]?.vibbedByMe}
+                  onToggleVib={() => userId && toggleVib.mutate({ profileId: userId, itemType: 'post', itemId: p.id, currentlyVibbed: postsVibs?.[p.id]?.vibbedByMe ?? false })}
                 />
               ))}
             </View>
@@ -363,13 +321,38 @@ export default function ProfileScreen() {
           <Text style={styles.emptyTabText}>No matches recorded yet</Text>
         </View>
       )}
-      <PhotoViewerModal
-        visible={!!viewingPhoto}
-        photoUrl={viewingPhoto?.photo_url ?? null}
-        caption={viewingPhoto?.caption}
-        onClose={() => setViewingPhoto(null)}
+      <PostDetailModal
+        post={viewingPost}
+        userId={userId}
+        onClose={() => setViewingPost(null)}
+      />
+      <PostRadialMenu
+        post={radialPost}
+        isOwner={radialPost?.profile_id === userId}
+        vibbedByMe={postsVibs?.[radialPost?.id ?? '']?.vibbedByMe ?? false}
+        onClose={() => setRadialPost(null)}
+        onVib={() => {
+          if (!radialPost || !userId) return;
+          toggleVib.mutate({ profileId: userId, itemType: 'post', itemId: radialPost.id, currentlyVibbed: postsVibs?.[radialPost.id]?.vibbedByMe ?? false });
+          setRadialPost(null);
+        }}
+        onPin={() => setRadialPost(null)}
+        onDelete={() => {
+          if (!radialPost) return;
+          deletePost.mutate({ postId: radialPost.id, photoUrl: radialPost.photo_url });
+          setRadialPost(null);
+        }}
       />
     </ScrollView>
+
+    {/* FAB — new post */}
+    <Pressable
+      style={[styles.fab, { bottom: insets.bottom + 90 }]}
+      onPress={() => router.push('/post/new' as any)}
+    >
+      <Ionicons name="add" size={26} color={theme.onAccent} />
+    </Pressable>
+    </View>
   );
 }
 
@@ -463,17 +446,21 @@ const styles = StyleSheet.create({
   masonryRow: { flexDirection: 'row', gap: MASONRY_GAP, paddingHorizontal: MASONRY_PADDING, paddingTop: 4 },
   masonryCol: { flex: 1, gap: MASONRY_GAP },
   emptyTab: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 10 },
-  searchTab: { paddingHorizontal: 20, paddingTop: 16, gap: 8 },
-  searchInputWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.card,
-    borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, marginBottom: 8,
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  searchInput: { flex: 1, color: theme.text, fontSize: 14, paddingVertical: 12 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border },
-  searchAvatar: { width: 40, height: 40, borderRadius: 20 },
-  searchAvatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
-  searchName: { color: theme.text, fontSize: 13, fontWeight: '700' },
-  searchMeta: { color: theme.textMuted, fontSize: 11, marginTop: 2 },
   emptyTabText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
   emptyTabBtn: { backgroundColor: theme.primary, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 8, marginTop: 4 },
   emptyTabBtnText: { color: theme.onAccent, fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },

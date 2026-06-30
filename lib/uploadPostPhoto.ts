@@ -8,8 +8,7 @@ export async function pickPostPhoto(): Promise<{ base64: string; ext: string } |
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsEditing: true,
-    aspect: [4, 5],
-    quality: 0.7,
+    quality: 0.8,
     base64: true,
   });
 
