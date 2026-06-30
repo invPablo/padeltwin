@@ -326,7 +326,7 @@ export default function HomeScreen() {
       ) : null}
 
       {/* PS Score Hero Carousel */}
-      <View style={{ marginBottom: 8, height: 200 }}>
+      <View style={{ marginBottom: 8, height: 200, position: 'relative' }}>
         <Animated.ScrollView 
           horizontal 
           pagingEnabled 
@@ -482,42 +482,44 @@ export default function HomeScreen() {
           </Animated.View>
         </Animated.ScrollView>
         
-        {/* Pagination Dots */}
-        <View style={styles.paginationDots}>
-          <Animated.View 
-            style={[
-              styles.dot, 
-              {
-                width: scrollX.interpolate({
-                  inputRange: [-screenWidth, 0, screenWidth],
-                  outputRange: [6, 16, 6],
-                  extrapolate: 'clamp'
-                }),
-                backgroundColor: scrollX.interpolate({
-                  inputRange: [-screenWidth, 0, screenWidth],
-                  outputRange: [theme.border, theme.primary, theme.border],
-                  extrapolate: 'clamp'
-                })
-              }
-            ]} 
-          />
-          <Animated.View 
-            style={[
-              styles.dot, 
-              {
-                width: scrollX.interpolate({
-                  inputRange: [0, screenWidth, screenWidth * 2],
-                  outputRange: [6, 16, 6],
-                  extrapolate: 'clamp'
-                }),
-                backgroundColor: scrollX.interpolate({
-                  inputRange: [0, screenWidth, screenWidth * 2],
-                  outputRange: [theme.border, theme.primary, theme.border],
-                  extrapolate: 'clamp'
-                })
-              }
-            ]} 
-          />
+        {/* Pagination Dots — overlaid inside the carousel card, not below it */}
+        <View style={styles.paginationDots} pointerEvents="none">
+          <View style={styles.paginationDotsPill}>
+            <Animated.View
+              style={[
+                styles.dot,
+                {
+                  width: scrollX.interpolate({
+                    inputRange: [-screenWidth, 0, screenWidth],
+                    outputRange: [6, 16, 6],
+                    extrapolate: 'clamp'
+                  }),
+                  backgroundColor: scrollX.interpolate({
+                    inputRange: [-screenWidth, 0, screenWidth],
+                    outputRange: [theme.border, theme.primary, theme.border],
+                    extrapolate: 'clamp'
+                  })
+                }
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.dot,
+                {
+                  width: scrollX.interpolate({
+                    inputRange: [0, screenWidth, screenWidth * 2],
+                    outputRange: [6, 16, 6],
+                    extrapolate: 'clamp'
+                  }),
+                  backgroundColor: scrollX.interpolate({
+                    inputRange: [0, screenWidth, screenWidth * 2],
+                    outputRange: [theme.border, theme.primary, theme.border],
+                    extrapolate: 'clamp'
+                  })
+                }
+              ]}
+            />
+          </View>
         </View>
       </View>
 
@@ -935,11 +937,22 @@ const styles = StyleSheet.create({
   },
   suggestedAvatarPlaceholderLogo: { width: 18, height: 18, opacity: 0.5 },
   paginationDots: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  paginationDotsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    marginTop: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   dot: {
     height: 6,
