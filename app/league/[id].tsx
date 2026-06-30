@@ -100,7 +100,7 @@ export default function LeagueDetailScreen() {
                   <Image source={require('@/assets/images/icon.png')} style={styles.avatarPlaceholderLogo} resizeMode="contain" />
                 </View>
                 <Text style={styles.playerName} numberOfLines={1}>
-                  {(m.profiles?.full_name ?? 'Player').toUpperCase()} {isMe ? '(YOU)' : ''}
+                  {m.profiles?.full_name ?? 'Player'} {isMe ? '(YOU)' : ''}
                 </Text>
                 <Text style={styles.playerElo}>{m.profiles?.elo ?? 1200}</Text>
                 {isCreator && !isMe && (
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarPlaceholderLogo: { width: 16, height: 16, opacity: 0.5 },
-  playerName: { flex: 1, color: theme.text,  fontSize: 12, letterSpacing: 0.2 , textTransform: 'uppercase'},
+  playerName: { flex: 1, color: theme.text, fontWeight: '700', fontSize: 12 },
   playerElo: { color: theme.text, fontWeight: '900', fontSize: 13 },
   emptyText: { color: theme.textMuted, fontSize: 13, marginTop: 16 },
   dangerButton: {

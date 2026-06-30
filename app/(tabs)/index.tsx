@@ -267,7 +267,7 @@ export default function MatchSearchScreen() {
                       <View style={styles.recentRow}>
                         <View style={{ flex: 1, marginRight: 12 }}>
                           <Text style={styles.recentVs}>VS</Text>
-                          <Text style={styles.recentOpponent} numberOfLines={1}>{opponentsOf(r, userId!).toUpperCase()}</Text>
+                          <Text style={styles.recentOpponent} numberOfLines={1}>{opponentsOf(r, userId!)}</Text>
                         </View>
                         <View style={[styles.recentBadge, win ? styles.recentBadgeWin : styles.recentBadgeLoss]}>
                           <Text style={[styles.recentBadgeText, { color: win ? theme.success : theme.textMuted }]}>{win ? 'WIN' : 'LOSS'}</Text>
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 15,  color: theme.text, flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 0.2},
+  cardTitle: { fontSize: 15, fontWeight: '700', color: theme.text, flex: 1, marginRight: 8 },
   modeBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,

@@ -279,7 +279,7 @@ export default function ProfileScreen() {
           {profile.coach_status === 'approved' && <CoachBadge />}
         </View>
 
-        {profile.zone ? <Text style={styles.locationSub}>📍 {profile.zone.toUpperCase()}</Text> : null}
+        {profile.zone ? <Text style={styles.locationSub}>📍 {profile.zone}</Text> : null}
 
         {scrimIndex != null && (
           <View style={[styles.scrimIndexPill, { borderColor: scrimIndex >= 7 ? theme.success : scrimIndex >= 5 ? theme.accent : theme.danger }]}>
@@ -432,7 +432,7 @@ export default function ProfileScreen() {
                 <View key={`${item.kind}-${item.id}`} style={styles.followedFeedRow}>
                   <Ionicons name={isAchievement ? 'trophy' : 'tennisball'} size={14} color={theme.accent} />
                   <Text style={styles.followedFeedText} numberOfLines={1}>
-                    <Text style={{ color: theme.text, fontWeight: '800' }}>{name.toUpperCase()}</Text>
+                    <Text style={{ color: theme.text, fontWeight: '800' }}>{name}</Text>
                     {'  '}{detail}
                   </Text>
                   <Text style={styles.followedFeedTime}>{formatRelativeTime(item.created_at)}</Text>
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   smallAvatarPlaceholderLogo: { width: 18, height: 18, opacity: 0.5 },
   cardInfoCol: { flex: 1 },
-  cardOpponentName: { fontSize: 13,  color: theme.text , textTransform: 'uppercase'},
+  cardOpponentName: { fontSize: 13, fontWeight: '700', color: theme.text },
   cardRatingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   cardResultText: { fontSize: 10, fontWeight: '700', color: theme.text },
   cardTimeText: { fontSize: 9, fontWeight: '500', color: theme.textMuted },
@@ -1083,7 +1083,7 @@ const styles = StyleSheet.create({
   },
   partnerInfo: { flex: 1, marginRight: 12 },
   partnerCity: { color: theme.textMuted, fontSize: 12, marginTop: 2, fontWeight: '600' },
-  requestName: { fontSize: 15,  color: theme.text, textTransform: 'uppercase', letterSpacing: 0.2},
+  requestName: { fontSize: 15, fontWeight: '700', color: theme.text },
   requestActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   smallButton: { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
   smallButtonText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },

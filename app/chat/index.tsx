@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowTitle: { color: theme.text, fontWeight: '800', fontSize: 13, textTransform: 'uppercase' },
+  rowTitle: { color: theme.text, fontWeight: '800', fontSize: 13 },
   rowBody: { color: theme.textMuted, fontSize: 12, marginTop: 2 },
   rowTime: { color: theme.textMuted, fontSize: 10, fontWeight: '600' },
 });

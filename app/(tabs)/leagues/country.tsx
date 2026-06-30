@@ -69,7 +69,7 @@ export default function CountryLeagueScreen() {
                     {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
                   </Text>
                   <Text style={styles.pairName} numberOfLines={1}>
-                    {(pair.player_a?.full_name ?? 'Player').toUpperCase()} & {(pair.player_b?.full_name ?? 'Player').toUpperCase()}
+                    {pair.player_a?.full_name ?? 'Player'} & {pair.player_b?.full_name ?? 'Player'}
                     {isMine ? ' (YOU)' : ''}
                   </Text>
                   {pair.player_a?.is_pro || pair.player_b?.is_pro ? <ProBadge size="sm" /> : null}
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   rowPodium: { backgroundColor: 'rgba(255, 215, 0, 0.04)' },
   rankText: { width: 24, color: theme.textMuted, fontWeight: '800', fontSize: 13 },
   rankTextTop: { color: theme.accent },
-  pairName: { flex: 1, color: theme.text,  fontSize: 12, letterSpacing: 0.2 , textTransform: 'uppercase'},
+  pairName: { flex: 1, color: theme.text, fontWeight: '700', fontSize: 12 },
   pairElo: { color: theme.text, fontWeight: '900', fontSize: 13 },
   emptyText: { color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: 16, lineHeight: 18 },
 });

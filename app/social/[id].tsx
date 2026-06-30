@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarPlaceholderLogo: { width: 18, height: 18, opacity: 0.5 },
-  playerName: { color: theme.text,  fontSize: 14, letterSpacing: 0.2 , textTransform: 'uppercase'},
+  playerName: { color: theme.text, fontWeight: '700', fontSize: 14 },
   playerLevel: { color: theme.textMuted, fontSize: 11, fontWeight: '600', marginTop: 2 },
   emptyText: { color: theme.textMuted, fontSize: 13, marginTop: 16 },
 });

@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   lookingBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
-  cardTitle: { fontSize: 13,  color: theme.text, textTransform: 'uppercase', letterSpacing: 0.2},
+  cardTitle: { fontSize: 13, fontWeight: '700', color: theme.text },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   compatRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   compatText: { color: theme.accent, fontSize: 8, fontWeight: '900', letterSpacing: 0.4 },

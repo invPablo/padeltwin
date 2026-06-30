@@ -118,7 +118,7 @@ export default function ClubLeaderboardScreen() {
                   {rank === 1 ? '👑' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank < 10 ? `0${rank}` : rank}
                 </Text>
                 <Text style={styles.leaderboardName} numberOfLines={1}>
-                  {(pair.player_a?.full_name ?? 'Player').toUpperCase()} & {(pair.player_b?.full_name ?? 'Player').toUpperCase()}
+                  {pair.player_a?.full_name ?? 'Player'} & {pair.player_b?.full_name ?? 'Player'}
                   {isMine ? ' (YOU)' : ''}
                 </Text>
                 {pair.player_a?.is_pro || pair.player_b?.is_pro ? <ProBadge size="sm" /> : null}
@@ -176,6 +176,6 @@ const styles = StyleSheet.create({
   leaderboardRowChampion: { backgroundColor: 'rgba(198,255,51,0.1)' },
   rankText: { color: theme.textMuted, fontWeight: '900', fontSize: 13, width: 24 },
   rankTextTop: { color: theme.accent },
-  leaderboardName: { flex: 1, color: theme.text,  fontSize: 12, letterSpacing: 0.3 , textTransform: 'uppercase'},
+  leaderboardName: { flex: 1, color: theme.text, fontWeight: '700', fontSize: 12 },
   leaderboardElo: { color: theme.text, fontWeight: '900', fontSize: 13 },
 });

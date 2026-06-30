@@ -101,7 +101,7 @@ export default function CoachDetailScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>MESSAGE {coach.full_name?.toUpperCase() ?? 'COACH'}</Text>
+            <Text style={styles.modalTitle}>Message {coach.full_name ?? 'Coach'}</Text>
             <TextInput
               style={styles.modalInput}
               value={message}
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   contactButtonText: { color: theme.onAccent, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard: { width: '100%', backgroundColor: theme.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: theme.border },
-  modalTitle: { color: theme.text,  fontSize: 12, letterSpacing: 1, marginBottom: 14 , textTransform: 'uppercase'},
+  modalTitle: { color: theme.text, fontWeight: '700', fontSize: 14, marginBottom: 14 },
   modalInput: {
     borderWidth: 1,
     borderColor: theme.border,

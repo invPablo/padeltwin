@@ -754,9 +754,9 @@ const styles = StyleSheet.create({
   },
   cardOpponentName: {
     fontSize: 13,
-    
+    fontWeight: '700',
     color: theme.text,
-   textTransform: 'uppercase'},
+  },
   cardRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',

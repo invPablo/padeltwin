@@ -572,16 +572,15 @@ export default function HomeScreen() {
             if (item.kind === 'achievement') {
               iconName = ACHIEVEMENT_ICONS[item.type] || 'trophy';
               avatarProfile = item.profiles;
-              primaryText = (item.profiles?.full_name ?? 'Player').toUpperCase();
+              primaryText = item.profiles?.full_name ?? 'Player';
               secondaryText = ACHIEVEMENT_LABELS[item.type] || 'New Achievement';
             } else {
               iconName = 'medal';
               avatarProfile = item.winner === 'a' ? item.team_a_player1_profile : item.team_b_player1_profile;
-              primaryText = (
+              primaryText =
                 item.winner === 'a'
                   ? teamLabel(item.team_a_player1_profile, item.team_a_player2_profile)
-                  : teamLabel(item.team_b_player1_profile, item.team_b_player2_profile)
-              ).toUpperCase();
+                  : teamLabel(item.team_b_player1_profile, item.team_b_player2_profile);
               secondaryText = `beat ${
                 item.winner === 'a'
                   ? teamLabel(item.team_b_player1_profile, item.team_b_player2_profile)
@@ -642,7 +641,7 @@ export default function HomeScreen() {
                     </View>
                   )}
                 </Pressable>
-                <Text style={styles.suggestedName} numberOfLines={1}>{(p.full_name ?? 'Player').toUpperCase()}</Text>
+                <Text style={styles.suggestedName} numberOfLines={1}>{p.full_name ?? 'Player'}</Text>
                 <Text style={styles.suggestedMeta}>{p.elo} PS</Text>
                 <Pressable
                   style={({ pressed }) => [styles.suggestedFollowButton, pressed && { opacity: 0.8 }]}
@@ -1003,8 +1002,8 @@ const styles = StyleSheet.create({
   },
   feedPlayerName: {
     color: theme.text,
-    
-   textTransform: 'uppercase'},
+    fontWeight: '800',
+  },
   feedLabelSeparator: {
     color: theme.borderActive,
     fontWeight: '900',
@@ -1072,12 +1071,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   suggestedName: {
-    fontSize: 10,
-    
+    fontSize: 11,
+    fontWeight: '800',
     color: theme.text,
     marginBottom: 2,
     textAlign: 'center',
-   textTransform: 'uppercase'},
+  },
   suggestedMeta: {
     fontSize: 9,
     color: theme.textMuted,
