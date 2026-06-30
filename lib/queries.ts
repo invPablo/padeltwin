@@ -32,7 +32,7 @@ import type {
 export type FeedItem =
   | ({ kind: "achievement"; vibCount: number; vibbedByMe: boolean } & AchievementWithProfile)
   | ({ kind: "match_result"; vibCount: number; vibbedByMe: boolean } & MatchResultWithProfiles)
-  | ({ kind: "post"; vibCount: number; vibbedByMe: boolean } & PostWithProfile);
+  | ({ kind: "post"; vibCount: number; vibbedByMe: boolean } & PostCardData);
 
 const LEVEL_ORDER: PlayerLevel[] = ["iniciacion", "intermedio", "avanzado"];
 
@@ -792,7 +792,8 @@ export function useActivityFeed(userId: string | undefined, limit = 20) {
         vibCount: 0,
         vibbedByMe: false,
       }));
-      const postItems = ((postsRes.data as unknown as PostWithProfile[]) ?? []).map((p) => ({
+      const postsWithMatches = await attachMatchResults((postsRes.data as unknown as PostWithProfile[]) ?? []);
+      const postItems = postsWithMatches.map((p) => ({
         ...p,
         kind: "post" as const,
         vibCount: 0,
@@ -916,6 +917,27 @@ export function useCreatePost() {
   });
 }
 
+// A post rendered as a "Match Card" needs the linked match's score/opponents,
+// not just the photo — this merges match_results onto posts client-side
+// (one extra query) so the card component never has to special-case it.
+export interface PostCardData extends PostWithProfile {
+  matchResult?: MatchResultWithProfiles | null;
+}
+
+async function attachMatchResults(posts: PostWithProfile[]): Promise<PostCardData[]> {
+  const matchIds = posts.map((p) => p.match_id).filter((id): id is string => !!id);
+  if (matchIds.length === 0) return posts;
+
+  const { data: results, error } = await supabase
+    .from("match_results")
+    .select(RESULT_PROFILES_SELECT)
+    .in("match_id", matchIds);
+  if (error) throw error;
+
+  const byMatchId = new Map((results as unknown as MatchResultWithProfiles[] ?? []).map((r) => [r.match_id, r]));
+  return posts.map((p) => ({ ...p, matchResult: p.match_id ? byMatchId.get(p.match_id) ?? null : null }));
+}
+
 export function useMyPosts(userId: string | undefined) {
   return useQuery({
     queryKey: ["myPosts", userId],
@@ -926,7 +948,7 @@ export function useMyPosts(userId: string | undefined) {
         .eq("profile_id", userId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as PostWithProfile[];
+      return attachMatchResults((data ?? []) as PostWithProfile[]);
     },
     enabled: !!userId,
   });

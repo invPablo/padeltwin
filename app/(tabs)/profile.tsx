@@ -22,6 +22,7 @@ import type { MatchResultWithProfiles } from '@/types/database';
 import { theme, cardRadius } from '@/constants/theme';
 import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
+import { MatchCard } from '@/components/MatchCard';
 
 function didWin(result: MatchResultWithProfiles, userId: string) {
   const inTeamA = result.team_a_player1 === userId || result.team_a_player2 === userId;
@@ -36,10 +37,7 @@ function opponentProfile(result: MatchResultWithProfiles, userId: string) {
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const GRID_GAP = 2;
-const GRID_COLS = 3;
-const GRID_PADDING = 0;
-const THUMB_SIZE = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+const CARD_WIDTH = SCREEN_WIDTH * 0.62;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -190,7 +188,7 @@ export default function ProfileScreen() {
       {/* Tabs */}
       <View style={styles.tabRow}>
         <Pressable style={[styles.tabBtn, activeTab === 'posts' && styles.tabBtnActive]} onPress={() => setActiveTab('posts')}>
-          <Ionicons name="grid-outline" size={18} color={activeTab === 'posts' ? theme.text : theme.textMuted} />
+          <Ionicons name="albums-outline" size={18} color={activeTab === 'posts' ? theme.text : theme.textMuted} />
         </Pressable>
         <Pressable style={[styles.tabBtn, activeTab === 'matches' && styles.tabBtnActive]} onPress={() => setActiveTab('matches')}>
           <Ionicons name="tennisball-outline" size={18} color={activeTab === 'matches' ? theme.text : theme.textMuted} />
@@ -201,11 +199,11 @@ export default function ProfileScreen() {
         postsLoading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 30 }} />
         ) : myPosts && myPosts.length > 0 ? (
-          <View style={styles.grid}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deckRow} snapToInterval={CARD_WIDTH + 12} decelerationRate="fast">
             {myPosts.map((p) => (
-              <Image key={p.id} source={{ uri: p.photo_url }} style={styles.gridThumb} />
+              <MatchCard key={p.id} post={p} posterId={userId} width={CARD_WIDTH} />
             ))}
-          </View>
+          </ScrollView>
         ) : (
           <View style={styles.emptyTab}>
             <Ionicons name="camera-outline" size={32} color={theme.textMuted} />
@@ -307,8 +305,7 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.border },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabBtnActive: { borderBottomColor: theme.accent },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
-  gridThumb: { width: THUMB_SIZE, height: THUMB_SIZE, backgroundColor: theme.card },
+  deckRow: { gap: 12, paddingHorizontal: 20, paddingVertical: 4 },
   emptyTab: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 10 },
   emptyTabText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
   emptyTabBtn: { backgroundColor: theme.primary, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 8, marginTop: 4 },

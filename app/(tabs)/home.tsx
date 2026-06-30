@@ -28,6 +28,7 @@ import { ELO_PROVISIONAL_MATCHES } from '@/constants/elo';
 import { ProBadge } from '@/components/ProBadge';
 import { CoachBadge } from '@/components/CoachBadge';
 import { Card } from '@/components/Card';
+import { MatchCard } from '@/components/MatchCard';
 import { AppButton } from '@/components/AppButton';
 
 function didWin(result: MatchResultWithProfiles, userId: string) {
@@ -588,16 +589,16 @@ export default function HomeScreen() {
                       <Text style={styles.feedTime}>{formatRelativeTime(item.created_at)}</Text>
                     </View>
                   </View>
-                  <Image source={{ uri: item.photo_url }} style={styles.postPhoto} />
-                  <View style={styles.postFooter}>
-                    {item.caption ? <Text style={styles.postCaption} numberOfLines={2}>{item.caption}</Text> : <View />}
-                    <Pressable
-                      style={({ pressed }) => [styles.vibButton, item.vibbedByMe && styles.vibButtonActive, pressed && { opacity: 0.8 }]}
-                      onPress={() => handleToggleVib(item)}
-                    >
-                      <Ionicons name={item.vibbedByMe ? 'heart' : 'heart-outline'} size={14} color={item.vibbedByMe ? theme.primary : theme.textMuted} />
-                      {item.vibCount > 0 && <Text style={[styles.vibCount, item.vibbedByMe && styles.vibCountActive]}>{item.vibCount}</Text>}
-                    </Pressable>
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                    <MatchCard
+                      post={item}
+                      posterId={item.profile_id}
+                      width={screenWidth - 64}
+                      height={260}
+                      vibCount={item.vibCount}
+                      vibbedByMe={item.vibbedByMe}
+                      onToggleVib={() => handleToggleVib(item)}
+                    />
                   </View>
                 </View>
               );
@@ -1015,9 +1016,6 @@ const styles = StyleSheet.create({
   },
   newPostBtnText: { color: theme.onAccent, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   postRow: { borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 8 },
-  postPhoto: { width: '100%', aspectRatio: 4 / 5, backgroundColor: '#1A1A1F' },
-  postFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10 },
-  postCaption: { flex: 1, color: theme.text, fontSize: 12, marginRight: 12 },
   feedContainer: {
     paddingVertical: 8,
     borderRadius: cardRadius,
